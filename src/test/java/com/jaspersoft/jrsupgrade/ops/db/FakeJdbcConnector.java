@@ -19,6 +19,9 @@ public final class FakeJdbcConnector implements JdbcConnector {
   public Optional<String> failOnStatementContaining = Optional.empty();
   public String product = "FakeDB 1.0";
 
+  /** What {@link Session#objects()} reports: the schema's tables and sequences. */
+  public final List<DbObject> objects = new ArrayList<>();
+
   @Override
   public Session connect(
       Path driverDir, String url, Optional<String> username, Optional<Secret> password)
@@ -45,6 +48,16 @@ public final class FakeJdbcConnector implements JdbcConnector {
           throw new JdbcException(JdbcException.Kind.SQL_FAILED, "boom: " + statement);
         }
         executed.add(statement);
+      }
+
+      @Override
+      public List<DbObject> objects() {
+        return List.copyOf(objects);
+      }
+
+      @Override
+      public String tableDdl(String table) {
+        return "CREATE TABLE " + table + " (\n  id INTEGER NOT NULL,\n  PRIMARY KEY (id)\n)";
       }
 
       @Override

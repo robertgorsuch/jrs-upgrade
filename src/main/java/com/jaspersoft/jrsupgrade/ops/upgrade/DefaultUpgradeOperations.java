@@ -672,6 +672,20 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
         warnings.add(EVENTS_LEFT_BEHIND_WARNING);
       }
     }
+    if (options.customDdl().isPresent() && firstMode != Mode.NEWDB) {
+      throw new UpgradeException(
+          UpgradeException.USAGE,
+          "--custom-ddl re-creates customer tables after js-upgrade-newdb dropped them; samedb"
+              + " migrates the database in place and keeps them",
+          "leave --custom-ddl out, or use --mode newdb");
+    }
+    if (firstMode == Mode.NEWDB) {
+      // issue #3: customer tables in the repository database go with it; name them now
+      CustomObjectSteps.warning(
+              CustomObjectSteps.scan(rt, in.installedBuildomatic()),
+              options.customDdl().isPresent())
+          .ifPresent(warnings::add);
+    }
     if (options.migratePasswords()) {
       // installation guide 10.1 pp.194-199 (issue #108): the migration utility ships with 10.1
       if (!VendorPreconditions.atLeast(
@@ -731,6 +745,8 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
       } else {
         steps.add(new BackupSteps.FullExport(rt, in, Phases.VENDOR_UPGRADE));
       }
+      // issue #3: the structure of the customer tables newdb drops, saved beside the export
+      steps.add(new CustomObjectSteps.DumpForeignSchema(rt, in));
     }
     if (options.tomcatDir().isPresent()) {
       steps.add(new TomcatSteps.CopyWebappToTomcat(rt, in));
@@ -742,6 +758,13 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
         // (upgrade guide 10.1 p.80, installation guide p.256; issue #106), with the js-import of
         // the version the newdb hop built, before any later hop migrates the database
         steps.add(new EventSteps.ImportEvents(rt, hop));
+      }
+      if (hop.hop().number() == 1 && firstMode == Mode.NEWDB) {
+        // issue #3: the operator's DDL for the customer tables newdb dropped, before any later hop
+        // and before the server starts
+        options
+            .customDdl()
+            .ifPresent(dir -> steps.add(new CustomObjectSteps.ApplyCustomDdl(rt, hop, dir)));
       }
     }
     if (lastMode == Mode.SAMEDB && options.migratePasswords()) {
@@ -855,6 +878,7 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
     inputs.put("config", configHash(rt.config()));
     inputs.put("to", options.toVersion());
     inputs.put("mode", prepared.firstMode().name());
+    options.customDdl().ifPresent(d -> inputs.put("customDdl", d.toString()));
     if (prepared.route()) {
       inputs.put("route", title(prepared, identity));
       for (UpgradeInput hop : prepared.hops()) {

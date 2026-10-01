@@ -76,7 +76,9 @@ public interface UpgradeOperations {
    * after the vendor run (issue #108), is refused for an older target and ignored with a warning
    * for newdb. {@code war} is a patched WAR deployed instead of the package's own (issue #9);
    * {@code transitPackages} are the unpacked packages of the intermediate versions of a multi-hop
-   * route (issue #1), in any order, matched to the hops by the version each states.
+   * route (issue #1), in any order, matched to the hops by the version each states; {@code
+   * customDdl} is a directory of SQL scripts re-applied after a newdb hop rebuilt the database
+   * (issue #3).
    */
   record UpgradeOptions(
       String toVersion,
@@ -90,7 +92,8 @@ public interface UpgradeOperations {
       boolean includeEvents,
       boolean migratePasswords,
       Optional<Path> war,
-      List<Path> transitPackages) {
+      List<Path> transitPackages,
+      Optional<Path> customDdl) {
     public UpgradeOptions {
       Objects.requireNonNull(toVersion, "toVersion");
       Objects.requireNonNull(packageDir, "packageDir");
@@ -101,6 +104,7 @@ public interface UpgradeOperations {
       Objects.requireNonNull(keyPassword, "keyPassword");
       Objects.requireNonNull(war, "war");
       Objects.requireNonNull(transitPackages, "transitPackages");
+      Objects.requireNonNull(customDdl, "customDdl");
       if (toVersion.isBlank()) {
         throw new IllegalArgumentException("toVersion must not be blank");
       }
@@ -108,6 +112,7 @@ public interface UpgradeOperations {
       existingExport = existingExport.map(p -> p.toAbsolutePath().normalize());
       war = war.map(p -> p.toAbsolutePath().normalize());
       transitPackages = transitPackages.stream().map(p -> p.toAbsolutePath().normalize()).toList();
+      customDdl = customDdl.map(p -> p.toAbsolutePath().normalize());
     }
 
     /** The options with the package's own webapp, one hop and no custom DDL. */
@@ -134,7 +139,8 @@ public interface UpgradeOperations {
           includeEvents,
           migratePasswords,
           Optional.empty(),
-          List.of());
+          List.of(),
+          Optional.empty());
     }
 
     /** The options with the events and the passwords left where the vendor script leaves them. */
@@ -220,7 +226,8 @@ public interface UpgradeOperations {
           includeEvents,
           migrate,
           war,
-          transitPackages);
+          transitPackages,
+          customDdl);
     }
 
     public UpgradeOptions withIncludeEvents(boolean include) {
@@ -236,7 +243,8 @@ public interface UpgradeOperations {
           include,
           migratePasswords,
           war,
-          transitPackages);
+          transitPackages,
+          customDdl);
     }
 
     public UpgradeOptions withExistingExport(Path export) {
@@ -252,7 +260,8 @@ public interface UpgradeOperations {
           includeEvents,
           migratePasswords,
           war,
-          transitPackages);
+          transitPackages,
+          customDdl);
     }
 
     public UpgradeOptions withKeyAlias(String alias) {
@@ -268,7 +277,8 @@ public interface UpgradeOperations {
           includeEvents,
           migratePasswords,
           war,
-          transitPackages);
+          transitPackages,
+          customDdl);
     }
 
     public UpgradeOptions withKeyPassword(SecretRef ref) {
@@ -284,7 +294,8 @@ public interface UpgradeOperations {
           includeEvents,
           migratePasswords,
           war,
-          transitPackages);
+          transitPackages,
+          customDdl);
     }
 
     /** The options with {@code patched} deployed instead of the package's own webapp (issue #9). */
@@ -301,7 +312,8 @@ public interface UpgradeOperations {
           includeEvents,
           migratePasswords,
           Optional.of(patched),
-          transitPackages);
+          transitPackages,
+          customDdl);
     }
 
     /** The options with the packages of a route's intermediate versions (issue #1). */
@@ -318,7 +330,26 @@ public interface UpgradeOperations {
           includeEvents,
           migratePasswords,
           war,
-          packages);
+          packages,
+          customDdl);
+    }
+
+    /** The options with SQL scripts re-applied after a newdb hop (issue #3). */
+    public UpgradeOptions withCustomDdl(Path dir) {
+      return new UpgradeOptions(
+          toVersion,
+          packageDir,
+          mode,
+          dbBackupConfirmed,
+          tomcatDir,
+          existingExport,
+          keyAlias,
+          keyPassword,
+          includeEvents,
+          migratePasswords,
+          war,
+          transitPackages,
+          Optional.of(dir));
     }
 
     /**
@@ -338,7 +369,8 @@ public interface UpgradeOperations {
           includeEvents,
           migratePasswords,
           war,
-          transitPackages);
+          transitPackages,
+          customDdl);
     }
 
     public static UpgradeOptions newdb(String toVersion, Path packageDir) {

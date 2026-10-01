@@ -436,6 +436,46 @@ class UpgradeStepIdempotencyTest {
     }
   }
 
+  /** Issue #3: the structure dump is rewritten with the same content. */
+  @Test
+  void should_write_the_same_dump_when_dump_foreign_schema_executes_twice() throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.createWithDatabase(tmp)) {
+      CustomObjectsTest.ngraSchema(f);
+      assertReexecutionConverges(f, f.ops().planUpgrade(newdb(f)), "r-dump", "dump-foreign-schema");
+      assertThat(f.fake.home.snapshots().resolve("r-dump").resolve("foreign-objects.sql")).exists();
+    }
+  }
+
+  @Test
+  void should_converge_when_dump_foreign_schema_compensates_twice() throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.createWithDatabase(tmp)) {
+      CustomObjectsTest.ngraSchema(f);
+      assertCompensationConverges(
+          f, f.ops().planUpgrade(newdb(f)), "r-dump-c", "dump-foreign-schema");
+    }
+  }
+
+  /** Issue #3: a script applied in this run is not sent to the database again. */
+  @Test
+  void should_run_each_script_once_when_apply_custom_ddl_executes_twice() throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.createWithDatabase(tmp)) {
+      CustomObjectsTest.ngraSchema(f);
+      Plan plan = f.ops().planUpgrade(newdb(f).withCustomDdl(CustomObjectsTest.customDdl(f)));
+      assertReexecutionConverges(f, plan, "r-ddl", "apply-custom-ddl");
+      assertThat(f.jdbc.executed.stream().filter(CustomObjectsTest.CUSTOM_TABLE::equals))
+          .hasSize(1);
+    }
+  }
+
+  @Test
+  void should_converge_when_apply_custom_ddl_compensates_twice() throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.createWithDatabase(tmp)) {
+      CustomObjectsTest.ngraSchema(f);
+      Plan plan = f.ops().planUpgrade(newdb(f).withCustomDdl(CustomObjectsTest.customDdl(f)));
+      assertCompensationConverges(f, plan, "r-ddl-c", "apply-custom-ddl");
+    }
+  }
+
   /** Issue #9: the patched WAR is staged once; the package's own WAR is set aside once. */
   @Test
   void should_stage_the_patched_war_once_when_stage_patched_war_executes_twice() throws Exception {

@@ -241,9 +241,9 @@ final class HelpExamples {
                     + " --package /opt/dist/jasperreports-server-pro-10.0.0-bin"
                     + " --package /opt/dist/jasperreports-server-pro-10.1.0-bin --plan"),
             new Example(
-                "Deploy the vendor's patched WAR instead of the package's own webapp",
+                "Deploy the vendor's patched WAR; re-create the customer tables newdb drops",
                 "jrs-upgrade upgrade --to 10.1.0 --package /opt/dist/jasperreports-server-pro-10.1.0-bin"
-                    + " --war /opt/dist/jasperserver-pro-10.1.0-hf.war")));
+                    + " --war /opt/dist/jasperserver-pro-10.1.0-hf.war --custom-ddl /opt/ngra/ddl")));
     m.put(
         "upgrade rollback",
         List.of(

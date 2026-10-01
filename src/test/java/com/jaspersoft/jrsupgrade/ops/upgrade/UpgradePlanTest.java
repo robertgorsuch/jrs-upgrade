@@ -107,6 +107,7 @@ class UpgradePlanTest {
               "stage-keystore-init",
               "stop-service",
               "full-export",
+              "dump-foreign-schema",
               "run-vendor-upgrade",
               "clear-tomcat-caches",
               "clear-repository-cache",

@@ -75,6 +75,15 @@ final class UpgradeCommand implements Callable<Integer> {
   Path war;
 
   @Option(
+      names = "--custom-ddl",
+      paramLabel = "<dir>",
+      description =
+          "newdb only: SQL scripts (*.sql, run in name order) that re-create the customer tables"
+              + " and sequences js-upgrade-newdb drops with the repository database; run after the"
+              + " vendor script, before the server starts. Their rows are not carried over.")
+  Path customDdl;
+
+  @Option(
       names = "--mode",
       paramLabel = "newdb|samedb",
       defaultValue = "newdb",
@@ -206,7 +215,8 @@ final class UpgradeCommand implements Callable<Integer> {
               includeEvents,
               migratePasswords,
               Optional.ofNullable(war),
-              packageDirs.subList(1, packageDirs.size()));
+              packageDirs.subList(1, packageDirs.size()),
+              Optional.ofNullable(customDdl));
       Plan planned;
       try {
         DefaultUpgradeOperations ops = new DefaultUpgradeOperations(services);

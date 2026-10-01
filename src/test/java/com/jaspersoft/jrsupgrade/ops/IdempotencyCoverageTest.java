@@ -89,6 +89,12 @@ import org.junit.jupiter.api.Test;
  *     <td>UpgradeStepIdempotencyTest#should_point_the_target_buildomatic_at_the_server_keystore_when_stage_keystore_init_executes_twice</td>
  *     <td>UpgradeStepIdempotencyTest#should_converge_when_stage_keystore_init_compensates_twice;
  *         UpgradeStepIdempotencyTest#should_remove_the_staged_file_when_stage_keystore_init_compensates_and_there_was_none</td></tr>
+ * <tr><td>upgrade CustomObjectSteps.DumpForeignSchema</td>
+ *     <td>UpgradeStepIdempotencyTest#should_write_the_same_dump_when_dump_foreign_schema_executes_twice</td>
+ *     <td>UpgradeStepIdempotencyTest#should_converge_when_dump_foreign_schema_compensates_twice</td></tr>
+ * <tr><td>upgrade CustomObjectSteps.ApplyCustomDdl</td>
+ *     <td>UpgradeStepIdempotencyTest#should_run_each_script_once_when_apply_custom_ddl_executes_twice</td>
+ *     <td>UpgradeStepIdempotencyTest#should_converge_when_apply_custom_ddl_compensates_twice</td></tr>
  * <tr><td>upgrade WarSteps.StagePatchedWar</td>
  *     <td>UpgradeStepIdempotencyTest#should_stage_the_patched_war_once_when_stage_patched_war_executes_twice</td>
  *     <td>UpgradeStepIdempotencyTest#should_converge_when_stage_patched_war_compensates_twice</td></tr>
@@ -316,6 +322,18 @@ class IdempotencyCoverageTest {
                   + "should_converge_when_write_master_properties_compensates_twice;"
                   + "jrs:vendor.MasterPropertiesTest#should_keep_pristine_backup_when_staged_twice;"
                   + "jrs:vendor.MasterPropertiesTest#should_leave_the_restored_original_alone_when_restored_twice"),
+          Map.entry(
+              OPS + "upgrade.CustomObjectSteps$DumpForeignSchema",
+              U
+                  + "should_write_the_same_dump_when_dump_foreign_schema_executes_twice;"
+                  + U
+                  + "should_converge_when_dump_foreign_schema_compensates_twice"),
+          Map.entry(
+              OPS + "upgrade.CustomObjectSteps$ApplyCustomDdl",
+              U
+                  + "should_run_each_script_once_when_apply_custom_ddl_executes_twice;"
+                  + U
+                  + "should_converge_when_apply_custom_ddl_compensates_twice"),
           Map.entry(
               OPS + "upgrade.WarSteps$StagePatchedWar",
               U

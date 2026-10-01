@@ -229,7 +229,9 @@ public final class PlanRegistry {
         // and one that deploys the package's own webapp (issue #9)
         text(args, "war").map(Path::of),
         // and one of a single hop (issue #1)
-        transitPackages(args));
+        transitPackages(args),
+        // and one that re-applies no DDL (issue #3)
+        text(args, "customDdl").map(Path::of));
   }
 
   private static List<Path> transitPackages(JsonNode args) {
@@ -280,6 +282,11 @@ public final class PlanRegistry {
     }
     ArrayNode transit = node.putArray("transitPackages");
     options.transitPackages().forEach(p -> transit.add(p.toString()));
+    if (options.customDdl().isPresent()) {
+      node.put("customDdl", options.customDdl().get().toString());
+    } else {
+      node.putNull("customDdl");
+    }
     return Json.write(node);
   }
 
