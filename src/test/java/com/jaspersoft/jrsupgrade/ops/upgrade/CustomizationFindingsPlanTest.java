@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jaspersoft.jrsupgrade.core.engine.Plan;
 import com.jaspersoft.jrsupgrade.core.state.Customization;
+import com.jaspersoft.jrsupgrade.ops.customizations.TestArchives;
 import com.jaspersoft.jrsupgrade.ops.upgrade.UpgradeOperations.UpgradeOptions;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -41,6 +42,38 @@ class CustomizationFindingsPlanTest {
                       .contains("jar commons-lang3-3.12.0.jar: DROP")
                       .contains("3.14.0")
                       .contains("issue #4"));
+    }
+  }
+
+  /** Issue #5: a registered jar built on a vendor type the target lacks, and on javax.servlet. */
+  @Test
+  void should_name_missing_vendor_types_and_a_jakarta_recompile_for_a_10_x_target()
+      throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
+      Path jar = f.webappDir.resolve("WEB-INF/lib/ngra-auth.jar");
+      String audit = "com.jaspersoft.jasperserver.api.logging.audit.AuditService";
+      java.nio.file.Files.write(
+          jar,
+          TestArchives.classJar(
+              java.util.Map.of(
+                  "com.ngra.Filter",
+                  TestArchives.classFile(
+                      "com.ngra.Filter",
+                      "java.lang.Object",
+                      java.util.List.of(),
+                      java.util.List.of(audit),
+                      java.util.List.of("(Ljavax/servlet/ServletRequest;)V")))));
+      register(f, jar);
+
+      Plan plan = f.ops().planUpgrade(UpgradeOptions.newdb("10.0.0", f.packageDir));
+
+      assertThat(plan.summary().warnings())
+          .anySatisfy(w -> assertThat(w).contains(audit).contains("MISSING").contains("issue #5"))
+          .anySatisfy(
+              w ->
+                  assertThat(w)
+                      .contains("jar ngra-auth.jar refers to javax.servlet")
+                      .contains("Jakarta EE 10"));
     }
   }
 

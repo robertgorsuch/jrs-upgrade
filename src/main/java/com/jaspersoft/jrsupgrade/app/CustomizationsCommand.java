@@ -467,6 +467,24 @@ final class CustomizationsCommand implements Runnable {
         }
         table.lines().forEach(l -> out.println(redactor.redact("  " + l)));
       }
+      out.println("vendor classes the site's code builds on (issue #5):");
+      if (f.classes().isEmpty()) {
+        out.println("  none");
+      } else {
+        TextTable table = new TextTable().row("STATUS", "IN", "VENDOR TYPE", "USED", "WHERE");
+        for (CustomizationOperations.ClassFinding c : f.classes()) {
+          table.row(c.status().name(), c.jar(), c.vendorType(), c.usedBy(), c.detail());
+        }
+        table.lines().forEach(l -> out.println(redactor.redact("  " + l)));
+      }
+      for (CustomizationOperations.JakartaFinding j : f.jakarta()) {
+        out.println(
+            redactor.redact(
+                "  RECOMPILE "
+                    + j.jar()
+                    + " for Jakarta EE 10 (jakarta.*): it refers to "
+                    + new java.util.TreeMap<>(j.javaxReferences())));
+      }
     }
 
     static Map<String, Object> findingsTree(CustomizationOperations.Findings f) {
@@ -485,6 +503,25 @@ final class CustomizationsCommand implements Runnable {
         jars.add(row);
       }
       tree.put("jars", jars);
+      List<Map<String, Object>> classes = new ArrayList<>();
+      for (CustomizationOperations.ClassFinding c : f.classes()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("jar", c.jar());
+        row.put("vendorType", c.vendorType());
+        row.put("usedBy", c.usedBy());
+        row.put("status", c.status().name());
+        row.put("detail", c.detail());
+        classes.add(row);
+      }
+      tree.put("classes", classes);
+      List<Map<String, Object>> jakarta = new ArrayList<>();
+      for (CustomizationOperations.JakartaFinding j : f.jakarta()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("jar", j.jar());
+        row.put("javaxReferences", new java.util.TreeMap<>(j.javaxReferences()));
+        jakarta.add(row);
+      }
+      tree.put("jakarta", jakarta);
       return tree;
     }
 

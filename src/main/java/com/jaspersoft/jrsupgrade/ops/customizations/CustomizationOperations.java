@@ -3,6 +3,7 @@ package com.jaspersoft.jrsupgrade.ops.customizations;
 import com.jaspersoft.jrsupgrade.core.state.Customization;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -168,17 +169,57 @@ public interface CustomizationOperations {
     }
   }
 
+  /** Whether the target still holds a vendor type the site's code builds on (issue #5). */
+  enum ClassStatus {
+    PRESENT,
+    /** Gone from its package, but a class of the same simple name exists elsewhere. */
+    MOVED,
+    MISSING,
+    /** The jar could not be read; nothing is known about it. */
+    UNREADABLE
+  }
+
+  /**
+   * One vendor type a site jar (or {@code WEB-INF/classes}) refers to: how it is used ("extended by
+   * com.example.Filter"), and where the target has it.
+   */
+  record ClassFinding(
+      String jar, String vendorType, String usedBy, ClassStatus status, String detail) {
+    public ClassFinding {
+      Objects.requireNonNull(jar, "jar");
+      Objects.requireNonNull(vendorType, "vendorType");
+      Objects.requireNonNull(usedBy, "usedBy");
+      Objects.requireNonNull(status, "status");
+      Objects.requireNonNull(detail, "detail");
+    }
+  }
+
+  /** A site jar that refers to javax packages Jakarta EE 10 renamed: it needs a recompile. */
+  record JakartaFinding(String jar, Map<String, Integer> javaxReferences) {
+    public JakartaFinding {
+      Objects.requireNonNull(jar, "jar");
+      javaxReferences = Map.copyOf(javaxReferences);
+    }
+  }
+
   /**
    * What becomes of a scan's changed and added files on the target version (ADR-0003): {@code
    * sourceVersion} is the running version, {@code targetVersion} the target's.
    */
   record Findings(
-      Path targetWebapp, String sourceVersion, String targetVersion, List<JarFinding> jars) {
+      Path targetWebapp,
+      String sourceVersion,
+      String targetVersion,
+      List<JarFinding> jars,
+      List<ClassFinding> classes,
+      List<JakartaFinding> jakarta) {
     public Findings {
       Objects.requireNonNull(targetWebapp, "targetWebapp");
       Objects.requireNonNull(sourceVersion, "sourceVersion");
       Objects.requireNonNull(targetVersion, "targetVersion");
       jars = List.copyOf(jars);
+      classes = List.copyOf(classes);
+      jakarta = List.copyOf(jakarta);
     }
   }
 

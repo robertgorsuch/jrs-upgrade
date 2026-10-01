@@ -48,6 +48,35 @@ public final class CustomizationFindings {
           JarRetirement.judge(jars, index, rules.jarRules(source, target))) {
         out.add("jar " + f.jar() + ": " + f.verdict() + ", " + f.reason() + " (issue #4)");
       }
+      java.util.Map<String, List<Path>> code = new java.util.LinkedHashMap<>();
+      jars.forEach(j -> code.put(j.getFileName().toString(), List.of(j)));
+      VendorClassCheck.Result classes = VendorClassCheck.check(code, index, target);
+      for (CustomizationOperations.ClassFinding c : classes.classes()) {
+        if (c.status() != CustomizationOperations.ClassStatus.PRESENT) {
+          out.add(
+              "jar "
+                  + c.jar()
+                  + ": vendor type "
+                  + c.vendorType()
+                  + " "
+                  + c.status()
+                  + " ("
+                  + c.usedBy()
+                  + "): "
+                  + c.detail()
+                  + " (issue #5)");
+        }
+      }
+      for (CustomizationOperations.JakartaFinding j : classes.jakarta()) {
+        out.add(
+            "jar "
+                + j.jar()
+                + " refers to "
+                + String.join(", ", new java.util.TreeSet<>(j.javaxReferences().keySet()))
+                + ": recompile it for Jakarta EE 10 (jakarta.*) before it goes on "
+                + target
+                + " (issue #5)");
+      }
     } catch (IOException e) {
       out.add(
           "the registered jars cannot be judged against "

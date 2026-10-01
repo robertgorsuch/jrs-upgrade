@@ -15,11 +15,11 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /** Jars, WARs and minimal class files built in memory for the customization-finding tests. */
-final class TestArchives {
+public final class TestArchives {
 
   private TestArchives() {}
 
-  static byte[] zip(Map<String, byte[]> entries) throws IOException {
+  public static byte[] zip(Map<String, byte[]> entries) throws IOException {
     ByteArrayOutputStream bytes = new ByteArrayOutputStream();
     try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
       for (Map.Entry<String, byte[]> e : entries.entrySet()) {
@@ -31,7 +31,7 @@ final class TestArchives {
     return bytes.toByteArray();
   }
 
-  static Path write(Path file, byte[] bytes) throws IOException {
+  public static Path write(Path file, byte[] bytes) throws IOException {
     Files.createDirectories(file.getParent());
     try (OutputStream out = Files.newOutputStream(file)) {
       out.write(bytes);
@@ -39,12 +39,12 @@ final class TestArchives {
     return file;
   }
 
-  static byte[] text(String s) {
+  public static byte[] text(String s) {
     return s.getBytes(StandardCharsets.UTF_8);
   }
 
   /** A jar with a pom.properties for {@code groupId:artifactId:version}, plus {@code more}. */
-  static byte[] mavenJar(
+  public static byte[] mavenJar(
       String groupId, String artifactId, String version, Map<String, byte[]> more)
       throws IOException {
     Map<String, byte[]> entries = new LinkedHashMap<>();
@@ -56,7 +56,7 @@ final class TestArchives {
   }
 
   /** A jar holding the given classes (binary name -> class bytes). */
-  static byte[] classJar(Map<String, byte[]> classes) throws IOException {
+  public static byte[] classJar(Map<String, byte[]> classes) throws IOException {
     Map<String, byte[]> entries = new LinkedHashMap<>();
     classes.forEach((name, bytes) -> entries.put(name.replace('.', '/') + ".class", bytes));
     return zip(entries);
@@ -67,7 +67,7 @@ final class TestArchives {
    * interfaces}, whose constant pool also references {@code refs} (as class constants) and holds
    * {@code descriptors} (as UTF-8 constants, the way method signatures name types).
    */
-  static byte[] classFile(
+  public static byte[] classFile(
       String name,
       String superName,
       List<String> interfaces,
@@ -121,7 +121,7 @@ final class TestArchives {
     return bytes.toByteArray();
   }
 
-  static Map<String, byte[]> entries(Object... pairs) {
+  public static Map<String, byte[]> entries(Object... pairs) {
     Map<String, byte[]> out = new LinkedHashMap<>();
     for (int i = 0; i < pairs.length; i += 2) {
       out.put((String) pairs[i], (byte[]) pairs[i + 1]);

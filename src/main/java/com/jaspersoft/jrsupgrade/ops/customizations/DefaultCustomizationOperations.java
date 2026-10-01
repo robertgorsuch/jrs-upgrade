@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -155,15 +156,27 @@ public final class DefaultCustomizationOperations implements CustomizationOperat
     try {
       PackageIndex index = PackageIndex.read(targetWebapp);
       List<Path> jars = new ArrayList<>();
+      Map<String, List<Path>> code = new java.util.LinkedHashMap<>();
       for (ScanEntry e : scan.entries()) {
-        if ((e.change() == Change.ADDED || e.change() == Change.CHANGED)
-            && PackageIndex.isLibJar(e.relativePath())
-            && e.installed().isPresent()) {
+        if ((e.change() != Change.ADDED && e.change() != Change.CHANGED)
+            || e.installed().isEmpty()) {
+          continue;
+        }
+        if (PackageIndex.isLibJar(e.relativePath())) {
           jars.add(e.installed().get());
+          code.put(e.installed().get().getFileName().toString(), List.of(e.installed().get()));
+        } else if (e.relativePath().startsWith(CLASSES) && e.relativePath().endsWith(".class")) {
+          code.computeIfAbsent(CLASSES_NAME, k -> new ArrayList<>()).add(e.installed().get());
         }
       }
+      VendorClassCheck.Result classes = VendorClassCheck.check(code, index, to);
       return new Findings(
-          targetWebapp, source, to, JarRetirement.judge(jars, index, rules.jarRules(source, to)));
+          targetWebapp,
+          source,
+          to,
+          JarRetirement.judge(jars, index, rules.jarRules(source, to)),
+          classes.classes(),
+          classes.jakarta());
     } catch (IOException e) {
       throw new CustomizationException(
           "cannot read the target " + targetWebapp + ": " + e.getMessage(),
@@ -171,6 +184,9 @@ public final class DefaultCustomizationOperations implements CustomizationOperat
           e);
     }
   }
+
+  static final String CLASSES = "WEB-INF/classes/";
+  static final String CLASSES_NAME = "WEB-INF/classes";
 
   /** The version a webapp directory's jars or a WAR's name or directory states. */
   private static Optional<String> version(Path webapp) {
