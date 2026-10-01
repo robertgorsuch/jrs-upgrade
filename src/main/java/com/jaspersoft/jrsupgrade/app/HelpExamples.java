@@ -266,7 +266,11 @@ final class HelpExamples {
                 "jrs-upgrade customizations scan --vendor /opt/dist/jasperreports-server-pro-10.0.0-bin"),
             new Example(
                 "Register everything found, without asking",
-                "jrs-upgrade customizations scan --vendor /opt/dist/jasperserver-pro.war --register")));
+                "jrs-upgrade customizations scan --vendor /opt/dist/jasperserver-pro.war --register"),
+            new Example(
+                "Say what becomes of each change on 10.1: jar verdicts and the matrix's rules",
+                "jrs-upgrade customizations scan --vendor /opt/dist/jasperreports-server-pro-8.2.0-bin"
+                    + " --target /opt/dist/jasperreports-server-pro-10.1.0-bin")));
     m.put(
         "customizations unregister",
         List.of(

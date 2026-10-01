@@ -138,6 +138,57 @@ public interface CustomizationOperations {
    */
   Scan scan(Path vendor);
 
+  /** What {@link #assess} says to do with a jar the site added or patched (issue #4). */
+  enum JarVerdict {
+    /** The target ships the same artifact, as new or newer. */
+    DROP,
+    /** The target ships nothing like it: keep it as the site's own dependency. */
+    KEEP,
+    /** A named rule of the matrix replaces it with something else. */
+    REPLACE,
+    /** The target ships the same artifact, older: two versions would be on the class path. */
+    REVIEW,
+    /** No coordinates to judge by. */
+    UNRESOLVED
+  }
+
+  /** One jar of {@link Findings}: its file name, what it says it is, and the verdict. */
+  record JarFinding(
+      String jar,
+      Optional<String> coordinates,
+      JarVerdict verdict,
+      Optional<String> targetJar,
+      String reason) {
+    public JarFinding {
+      Objects.requireNonNull(jar, "jar");
+      Objects.requireNonNull(coordinates, "coordinates");
+      Objects.requireNonNull(verdict, "verdict");
+      Objects.requireNonNull(targetJar, "targetJar");
+      Objects.requireNonNull(reason, "reason");
+    }
+  }
+
+  /**
+   * What becomes of a scan's changed and added files on the target version (ADR-0003): {@code
+   * sourceVersion} is the running version, {@code targetVersion} the target's.
+   */
+  record Findings(
+      Path targetWebapp, String sourceVersion, String targetVersion, List<JarFinding> jars) {
+    public Findings {
+      Objects.requireNonNull(targetWebapp, "targetWebapp");
+      Objects.requireNonNull(sourceVersion, "sourceVersion");
+      Objects.requireNonNull(targetVersion, "targetVersion");
+      jars = List.copyOf(jars);
+    }
+  }
+
+  /**
+   * Judges {@code scan}'s changed and added files against the target distribution {@code target}
+   * (its unpacked directory, webapp directory or WAR) with the matrix's rules; read-only. {@code
+   * targetVersion} overrides the version the target states, and is required when it states none.
+   */
+  Findings assess(Scan scan, Path target, Optional<String> targetVersion);
+
   /**
    * Registers every {@link Change#CHANGED} and {@link Change#ADDED} file of {@code scan} that is
    * not registered yet: a changed file with the vendor's hash as its original, an added one with

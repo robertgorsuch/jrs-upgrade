@@ -28,6 +28,7 @@ import com.jaspersoft.jrsupgrade.ops.ClusterNotice;
 import com.jaspersoft.jrsupgrade.ops.Services;
 import com.jaspersoft.jrsupgrade.ops.TomcatJavaOpts;
 import com.jaspersoft.jrsupgrade.ops.TomcatVersion;
+import com.jaspersoft.jrsupgrade.ops.customizations.CustomizationFindings;
 import com.jaspersoft.jrsupgrade.ops.db.DefaultJdbcConnector;
 import com.jaspersoft.jrsupgrade.ops.hotfix.HotfixException;
 import com.jaspersoft.jrsupgrade.ops.hotfix.HotfixPaths;
@@ -601,6 +602,19 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
             warnings.addAll(
                 HotfixLabels.mismatches(
                     in.webappDir(), id.version(), rt.store().installedHotfixes())));
+    // ADR-0003: what becomes of the registered customizations on the target, read from the WAR
+    // that will be deployed
+    Optional<Path> targetWebapp =
+        war.map(PatchedWar::path).or(() -> in.target().webappDir()).or(() -> in.target().warFile());
+    identity.ifPresent(
+        id ->
+            warnings.addAll(
+                CustomizationFindings.forPlan(
+                    rt.store().customizations(),
+                    targetWebapp,
+                    id.version(),
+                    options.toVersion(),
+                    rt.services().matrix().rules())));
     return new Prepared(in, List.copyOf(hops), target, identity, war, warnings);
   }
 

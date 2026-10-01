@@ -1,5 +1,6 @@
 package com.jaspersoft.jrsupgrade.ops.customizations;
 
+import com.jaspersoft.jrsupgrade.core.compat.UpgradeRules;
 import com.jaspersoft.jrsupgrade.core.platform.Trees;
 import com.jaspersoft.jrsupgrade.core.snapshot.Snapshot;
 import com.jaspersoft.jrsupgrade.core.snapshot.SnapshotManifest;
@@ -8,6 +9,7 @@ import com.jaspersoft.jrsupgrade.core.state.AuditActor;
 import com.jaspersoft.jrsupgrade.core.state.Customization;
 import com.jaspersoft.jrsupgrade.core.state.SnapshotRecord;
 import com.jaspersoft.jrsupgrade.core.state.StateStore;
+import com.jaspersoft.jrsupgrade.ops.JrsVersion;
 import com.jaspersoft.jrsupgrade.ops.Services;
 import com.jaspersoft.jrsupgrade.ops.hotfix.HotfixException;
 import com.jaspersoft.jrsupgrade.ops.hotfix.HotfixPaths;
@@ -18,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -122,6 +125,68 @@ public final class DefaultCustomizationOperations implements CustomizationOperat
           "check that both are readable",
           e);
     }
+  }
+
+  @Override
+  public Findings assess(Scan scan, Path target, Optional<String> targetVersion) {
+    Objects.requireNonNull(scan, "scan");
+    Objects.requireNonNull(target, "target");
+    Path targetWebapp = WebappScanner.vendorWebapp(target, webappName());
+    String source =
+        version(scan.vendorWebapp())
+            .or(() -> JrsVersion.ofWebapp(scan.installedWebapp()))
+            .orElseThrow(
+                () ->
+                    new CustomizationException(
+                        "cannot tell the running version from "
+                            + scan.vendorWebapp()
+                            + " or "
+                            + scan.installedWebapp(),
+                        "point --vendor at the unpacked distribution of the running version"));
+    String to =
+        targetVersion
+            .or(() -> JrsVersion.ofDistributionDir(target))
+            .or(() -> version(targetWebapp))
+            .orElseThrow(
+                () ->
+                    new CustomizationException(
+                        "cannot tell the target version from " + target, "pass --to <version>"));
+    UpgradeRules rules = services.matrix().rules();
+    try {
+      PackageIndex index = PackageIndex.read(targetWebapp);
+      List<Path> jars = new ArrayList<>();
+      for (ScanEntry e : scan.entries()) {
+        if ((e.change() == Change.ADDED || e.change() == Change.CHANGED)
+            && PackageIndex.isLibJar(e.relativePath())
+            && e.installed().isPresent()) {
+          jars.add(e.installed().get());
+        }
+      }
+      return new Findings(
+          targetWebapp, source, to, JarRetirement.judge(jars, index, rules.jarRules(source, to)));
+    } catch (IOException e) {
+      throw new CustomizationException(
+          "cannot read the target " + targetWebapp + ": " + e.getMessage(),
+          "check that the target distribution is complete and readable",
+          e);
+    }
+  }
+
+  /** The version a webapp directory's jars or a WAR's name or directory states. */
+  private static Optional<String> version(Path webapp) {
+    return Files.isDirectory(webapp)
+        ? JrsVersion.ofWebapp(webapp).or(() -> JrsVersion.ofDistributionDir(webapp.getParent()))
+        : JrsVersion.ofArtifactName(webapp)
+            .or(() -> JrsVersion.ofDistributionDir(webapp.getParent()));
+  }
+
+  private String webappName() {
+    return services
+        .config()
+        .server()
+        .webappName()
+        .map(com.jaspersoft.jrsupgrade.core.config.Config.WebappName::yamlValue)
+        .orElse("jasperserver-pro");
   }
 
   @Override

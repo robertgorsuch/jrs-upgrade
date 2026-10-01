@@ -302,6 +302,21 @@ final class CustomizationsCommand implements Runnable {
         description = "Register every changed and added file that is not registered yet.")
     boolean register;
 
+    @picocli.CommandLine.Option(
+        names = "--target",
+        paramLabel = "<path>",
+        description =
+            "The distribution of the version to upgrade to (unpacked, its webapp directory, or"
+                + " the .war): also say what becomes of each changed and added file there, from"
+                + " the matrix's rules (ADR-0003).")
+    Path target;
+
+    @picocli.CommandLine.Option(
+        names = "--to",
+        paramLabel = "<version>",
+        description = "The target's version, when --target does not state it.")
+    String to;
+
     @Override
     public Integer call() {
       PrintWriter out = spec.commandLine().getOut();
@@ -311,10 +326,14 @@ final class CustomizationsCommand implements Runnable {
         CustomizationOperations ops = open(boot.services());
         CustomizationOperations.Scan scan;
         List<CustomizationOperations.TomcatEntry> tomcatFiles = List.of();
+        Optional<CustomizationOperations.Findings> findings = Optional.empty();
         try {
           scan = ops.scan(vendor);
           if (tomcat) {
             tomcatFiles = ops.scanTomcat();
+          }
+          if (target != null) {
+            findings = Optional.of(ops.assess(scan, target, Optional.ofNullable(to)));
           }
         } catch (CustomizationException e) {
           return refused(out, err, global.json(), e);
@@ -334,6 +353,7 @@ final class CustomizationsCommand implements Runnable {
           if (tomcat) {
             printTomcat(out, redactor, tomcatFiles);
           }
+          findings.ifPresent(f -> printFindings(out, redactor, f));
         }
         boolean doRegister = register || global.yes();
         if (!doRegister && !global.json() && !global.nonInteractive() && candidates > 0) {
@@ -390,6 +410,7 @@ final class CustomizationsCommand implements Runnable {
             }
             tree.put("tomcat", files);
           }
+          findings.ifPresent(f -> tree.put("findings", findingsTree(f)));
           out.println(redactor.redact(JsonOut.write(tree)));
         } else if (!registered.isEmpty()) {
           out.println(
@@ -423,6 +444,48 @@ final class CustomizationsCommand implements Runnable {
       out.println(
           "register one with: jrs-upgrade customizations register <tomcatDir>/<path>; an upgrade then"
               + " checks it, but does not copy it to a different Tomcat (--tomcat-dir)");
+    }
+
+    private static void printFindings(
+        PrintWriter out, Redactor redactor, CustomizationOperations.Findings f) {
+      out.println();
+      out.println(
+          "Against the target "
+              + f.targetWebapp()
+              + " ("
+              + f.sourceVersion()
+              + " -> "
+              + f.targetVersion()
+              + "):");
+      out.println("jars under WEB-INF/lib the vendor copy lacks or the site patched:");
+      if (f.jars().isEmpty()) {
+        out.println("  none");
+      } else {
+        TextTable table = new TextTable().row("VERDICT", "JAR", "WHY");
+        for (CustomizationOperations.JarFinding j : f.jars()) {
+          table.row(j.verdict().name(), j.jar(), j.reason());
+        }
+        table.lines().forEach(l -> out.println(redactor.redact("  " + l)));
+      }
+    }
+
+    static Map<String, Object> findingsTree(CustomizationOperations.Findings f) {
+      Map<String, Object> tree = new LinkedHashMap<>();
+      tree.put("targetWebapp", f.targetWebapp().toString());
+      tree.put("sourceVersion", f.sourceVersion());
+      tree.put("targetVersion", f.targetVersion());
+      List<Map<String, Object>> jars = new ArrayList<>();
+      for (CustomizationOperations.JarFinding j : f.jars()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("jar", j.jar());
+        j.coordinates().ifPresent(c -> row.put("coordinates", c));
+        row.put("verdict", j.verdict().name());
+        j.targetJar().ifPresent(t -> row.put("targetJar", t));
+        row.put("reason", j.reason());
+        jars.add(row);
+      }
+      tree.put("jars", jars);
+      return tree;
     }
 
     private static void print(
