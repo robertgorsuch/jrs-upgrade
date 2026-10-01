@@ -34,7 +34,7 @@ final class VendorPreconditionSteps {
 
     @Override
     public String id() {
-      return VERIFY_VENDOR_PRECONDITIONS;
+      return in.scoped(VERIFY_VENDOR_PRECONDITIONS);
     }
 
     @Override

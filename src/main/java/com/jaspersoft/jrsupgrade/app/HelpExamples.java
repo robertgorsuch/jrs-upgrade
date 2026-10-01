@@ -233,7 +233,13 @@ final class HelpExamples {
             new Example(
                 "Migrate the schema in place instead; back up the database yourself first",
                 "jrs-upgrade upgrade --to 10.0.0 --package /opt/dist/jasperreports-server-pro-10.0.0-bin"
-                    + " --mode samedb --db-backup-confirmed")));
+                    + " --mode samedb --db-backup-confirmed"),
+            new Example(
+                "8.2 to 10.1 through 10.0, one package per hop; 10.0 is a transit hop that deploys"
+                    + " nothing",
+                "jrs-upgrade upgrade --to 10.1.0"
+                    + " --package /opt/dist/jasperreports-server-pro-10.0.0-bin"
+                    + " --package /opt/dist/jasperreports-server-pro-10.1.0-bin --plan")));
     m.put(
         "upgrade rollback",
         List.of(

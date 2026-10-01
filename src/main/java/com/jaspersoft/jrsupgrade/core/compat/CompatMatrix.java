@@ -22,7 +22,9 @@ import org.semver4j.Semver;
  * {@code 8.2.0} and match semver ranges, and a version outside every range is reported as absent
  * (or, for {@link #javaRequiredFor}, as {@link UnsupportedVersionException}) rather than guessed;
  * edition, app server, database and mode comparisons are case-insensitive; an entry that lists no
- * Tomcat ranges and a path that lists no modes restrict nothing. The file is unsigned and says so.
+ * Tomcat ranges and a path that lists no modes restrict nothing; a route (issue #1) only ever stops
+ * at a listed release and is only offered for a pair no single path covers. The file is unsigned
+ * and says so.
  */
 public final class CompatMatrix {
 
@@ -83,17 +85,40 @@ public final class CompatMatrix {
     }
   }
 
+  /** One hop of a {@link #route}: a documented pair in the mode the route runs it in. */
+  public record RouteHop(String from, String to, String mode) {
+    public RouteHop {
+      Objects.requireNonNull(from, "from");
+      Objects.requireNonNull(to, "to");
+      Objects.requireNonNull(mode, "mode");
+    }
+  }
+
+  /** The most hops a route may take; the documented lines need two at most. */
+  static final int MAX_HOPS = 4;
+
   private final int matrixVersion;
   private final boolean signed;
   private final List<Entry> entries;
   private final List<UpgradePath> upgradePaths;
+  private final List<String> releases;
 
   public CompatMatrix(
       int matrixVersion, boolean signed, List<Entry> entries, List<UpgradePath> upgradePaths) {
+    this(matrixVersion, signed, entries, upgradePaths, List.of());
+  }
+
+  public CompatMatrix(
+      int matrixVersion,
+      boolean signed,
+      List<Entry> entries,
+      List<UpgradePath> upgradePaths,
+      List<String> releases) {
     this.matrixVersion = matrixVersion;
     this.signed = signed;
     this.entries = List.copyOf(entries);
     this.upgradePaths = List.copyOf(upgradePaths);
+    this.releases = List.copyOf(releases);
   }
 
   /** Loads the bundled matrix; a missing or malformed resource is a packaging error. */
@@ -149,7 +174,7 @@ public final class CompatMatrix {
         file.upgradePaths().stream()
             .map(p -> new UpgradePath(p.from(), p.to(), lowers(p.modes())))
             .toList();
-    return new CompatMatrix(file.matrixVersion(), file.signed(), entries, paths);
+    return new CompatMatrix(file.matrixVersion(), file.signed(), entries, paths, file.releases());
   }
 
   public int matrixVersion() {
@@ -166,6 +191,95 @@ public final class CompatMatrix {
 
   public List<UpgradePath> upgradePaths() {
     return upgradePaths;
+  }
+
+  /** The released versions a route may stop at, as the matrix lists them. */
+  public List<String> releases() {
+    return releases;
+  }
+
+  /**
+   * The documented route from {@code from} to {@code to} when no single path covers the pair (issue
+   * #1, ADR-0002): the fewest hops through {@link #releases()}, the first hop in {@code firstMode}
+   * and every later hop in {@code samedb}, since only the running server's export exists for a
+   * newdb hop to rebuild from. Among routes of equal length the one whose stops are latest wins.
+   * Empty when a single path covers the pair in some mode (that is not a route, and {@link
+   * #upgradeModes} says which mode), when either version is unparsable, or when no route of at most
+   * {@value #MAX_HOPS} hops exists.
+   */
+  public Optional<List<RouteHop>> route(String from, String to, String firstMode) {
+    Optional<Semver> f = parse(from);
+    Optional<Semver> t = parse(to);
+    if (f.isEmpty() || t.isEmpty() || !t.get().isGreaterThan(f.get())) {
+      return Optional.empty();
+    }
+    if (!upgradeModes(from, to).isEmpty()) {
+      return Optional.empty();
+    }
+    List<String> stops =
+        releases.stream()
+            .filter(r -> parse(r).filter(v -> v.isGreaterThan(f.get())).isPresent())
+            .filter(r -> parse(r).filter(v -> v.isLowerThan(t.get())).isPresent())
+            .sorted((a, b) -> parse(a).orElseThrow().compareTo(parse(b).orElseThrow()))
+            .distinct()
+            .toList();
+    for (int hops = 2; hops <= MAX_HOPS; hops++) {
+      Optional<List<RouteHop>> best = best(from, to, lower(firstMode), stops, hops - 1);
+      if (best.isPresent()) {
+        return best;
+      }
+    }
+    return Optional.empty();
+  }
+
+  /** The route through exactly {@code count} stops whose stops are latest, if any. */
+  private Optional<List<RouteHop>> best(
+      String from, String to, String firstMode, List<String> stops, int count) {
+    List<List<Integer>> combinations = new java.util.ArrayList<>();
+    combine(stops.size(), count, 0, new java.util.ArrayList<>(), combinations);
+    // latest stops first: compare the picked indices from the first stop on, higher wins
+    combinations.sort(
+        (x, y) -> {
+          for (int i = 0; i < x.size(); i++) {
+            int c = Integer.compare(y.get(i), x.get(i));
+            if (c != 0) {
+              return c;
+            }
+          }
+          return 0;
+        });
+    for (List<Integer> picks : combinations) {
+      List<String> versions = new java.util.ArrayList<>();
+      versions.add(from);
+      picks.forEach(i -> versions.add(stops.get(i)));
+      versions.add(to);
+      List<RouteHop> hops = new java.util.ArrayList<>();
+      for (int i = 0; i + 1 < versions.size(); i++) {
+        String mode = i == 0 ? firstMode : "samedb";
+        if (!upgradePathSupported(versions.get(i), versions.get(i + 1), mode)) {
+          break;
+        }
+        hops.add(new RouteHop(versions.get(i), versions.get(i + 1), mode));
+      }
+      if (hops.size() == versions.size() - 1) {
+        return Optional.of(List.copyOf(hops));
+      }
+    }
+    return Optional.empty();
+  }
+
+  /** Every ascending choice of {@code count} indices below {@code size}. */
+  private static void combine(
+      int size, int count, int start, List<Integer> picked, List<List<Integer>> out) {
+    if (picked.size() == count) {
+      out.add(List.copyOf(picked));
+      return;
+    }
+    for (int i = start; i < size; i++) {
+      picked.add(i);
+      combine(size, count, i + 1, picked, out);
+      picked.removeLast();
+    }
   }
 
   /** The entry whose range contains {@code version}, or empty when unsupported or unparsable. */
@@ -283,10 +397,15 @@ public final class CompatMatrix {
 
   /** YAML shape of the file; Jackson binds these records directly. */
   record MatrixFile(
-      int matrixVersion, boolean signed, List<EntryYaml> entries, List<PathYaml> upgradePaths) {
+      int matrixVersion,
+      boolean signed,
+      List<EntryYaml> entries,
+      List<PathYaml> upgradePaths,
+      List<String> releases) {
     MatrixFile {
       entries = entries == null ? List.of() : entries;
       upgradePaths = upgradePaths == null ? List.of() : upgradePaths;
+      releases = releases == null ? List.of() : releases;
     }
   }
 

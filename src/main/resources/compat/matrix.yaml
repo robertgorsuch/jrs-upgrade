@@ -98,3 +98,9 @@ upgradePaths:
   - { from: ">=9.0.0 <10.0.0", to: ">=10.0.0 <10.1.0", modes: [samedb, newdb] }
   - { from: ">=9.0.0 <10.0.0", to: ">=10.1.0 <11.0.0", modes: [newdb] }
   - { from: ">=10.0.0 <11.0.0", to: ">=10.0.0 <11.0.0", modes: [samedb, newdb] }
+
+# Issue #1, ADR-0002: the GA releases a multi-hop route may stop at. When no single path above
+# covers a pair, jrs-upgrade routes through these (fewest hops, the first hop in --mode, every later
+# hop samedb) and asks for one unpacked package per stop. The NGRA 8.2.0 to 10.1.0 guide (section 4)
+# takes 8.2.0 -> 10.0.0 (newdb) -> 10.1.0 (samedb).
+releases: ["7.1.0", "7.2.0", "7.5.0", "7.8.0", "7.9.0", "8.0.0", "8.1.0", "8.2.0", "9.0.0", "10.0.0", "10.1.0"]

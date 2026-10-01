@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +21,61 @@ class CompatMatrixTest {
     assertThat(matrix.signed()).isFalse();
     assertThat(matrix.entries()).hasSize(6);
     assertThat(matrix.upgradePaths()).isNotEmpty();
+  }
+
+  /** Issue #1: the NGRA route, 8.2.0 to 10.1.0, is two documented hops. */
+  @Test
+  void should_route_through_10_0_when_8_2_to_10_1_has_no_single_path() {
+    assertThat(matrix.route("8.2.0", "10.1.0", "newdb"))
+        .contains(
+            List.of(
+                new CompatMatrix.RouteHop("8.2.0", "10.0.0", "newdb"),
+                new CompatMatrix.RouteHop("10.0.0", "10.1.0", "samedb")));
+  }
+
+  @Test
+  void should_not_route_when_a_single_path_covers_the_pair_or_no_route_exists() {
+    assertThat(matrix.route("9.0.0", "10.1.0", "newdb")).isEmpty();
+    assertThat(matrix.route("8.2.0", "12.0.0", "newdb")).isEmpty();
+    assertThat(matrix.route("garbage", "10.1.0", "newdb")).isEmpty();
+    // from 7.x every route crosses into 8.x with newdb, which only a first hop may run
+    assertThat(matrix.route("7.5.0", "10.1.0", "samedb")).isEmpty();
+    assertThat(matrix.route("7.5.0", "10.1.0", "newdb")).isPresent();
+  }
+
+  /** Every hop samedb is a route too: each migrates the database the hop before it left. */
+  @Test
+  void should_route_samedb_hop_by_hop_when_the_first_hop_is_samedb() {
+    assertThat(matrix.route("8.2.0", "10.1.0", "samedb"))
+        .contains(
+            List.of(
+                new CompatMatrix.RouteHop("8.2.0", "9.0.0", "samedb"),
+                new CompatMatrix.RouteHop("9.0.0", "10.0.0", "samedb"),
+                new CompatMatrix.RouteHop("10.0.0", "10.1.0", "samedb")));
+  }
+
+  @Test
+  void should_prefer_the_fewest_hops_then_the_latest_stops_when_routing() throws IOException {
+    String yaml =
+        """
+        matrixVersion: 2
+        signed: false
+        entries: []
+        upgradePaths:
+          - { from: ">=1.0.0 <2.0.0", to: ">=2.0.0 <4.0.0", modes: [newdb] }
+          - { from: ">=2.0.0 <4.0.0", to: ">=3.0.0 <6.0.0", modes: [samedb] }
+          - { from: ">=5.0.0 <6.0.0", to: ">=6.0.0 <7.0.0", modes: [samedb] }
+        releases: ["2.0.0", "3.0.0", "4.0.0", "5.0.0"]
+        """;
+    CompatMatrix m =
+        CompatMatrix.load(new ByteArrayInputStream(yaml.getBytes(StandardCharsets.UTF_8)));
+
+    assertThat(m.route("1.0.0", "6.0.0", "newdb"))
+        .contains(
+            List.of(
+                new CompatMatrix.RouteHop("1.0.0", "3.0.0", "newdb"),
+                new CompatMatrix.RouteHop("3.0.0", "5.0.0", "samedb"),
+                new CompatMatrix.RouteHop("5.0.0", "6.0.0", "samedb")));
   }
 
   @Test

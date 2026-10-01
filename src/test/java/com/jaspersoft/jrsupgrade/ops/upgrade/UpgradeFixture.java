@@ -490,6 +490,48 @@ public final class UpgradeFixture implements AutoCloseable {
             + "exec \"$(dirname \"$0\")/js-ant.sh\" upgrade-minimal-pro -Dstrategy=inDatabase\n");
   }
 
+  /**
+   * The unpacked package of an intermediate {@code version} for a route (issue #1), named the way
+   * the vendor names a bin distribution so it states its version. Its {@code js-ant} logs its
+   * arguments to {@code js-ant.log} in the package and deploys nothing; a {@link #FAIL_AFTER_COPY}
+   * file in the package makes it fail.
+   */
+  public Path transitPackage(String version) throws IOException {
+    Path pkg =
+        Files.createDirectories(root.resolve("jasperreports-server-pro-" + version + "-bin"));
+    Path buildomatic = Files.createDirectories(pkg.resolve("buildomatic"));
+    write(pkg.resolve("jasperserver-pro.war"), "war " + version);
+    write(
+        buildomatic.resolve("js-ant.bat"),
+        "@echo off\r\n"
+            + "echo js-ant transit "
+            + version
+            + " target=%1\r\n"
+            + "if exist \"%~dp0..\\"
+            + FAIL_AFTER_COPY
+            + "\" (echo BUILD FAILED in the transit hop & exit /b 3)\r\n"
+            + "echo %* >> \"%~dp0..\\js-ant.log\"\r\n"
+            + "echo BUILD SUCCESSFUL\r\n"
+            + "exit /b 0\r\n");
+    write(
+        buildomatic.resolve("js-ant.sh"),
+        "#!/bin/sh\n"
+            + "echo \"js-ant transit "
+            + version
+            + " target=$1\"\n"
+            + "if [ -f \"$(dirname \"$0\")/../"
+            + FAIL_AFTER_COPY
+            + "\" ]; then echo \"BUILD FAILED in the transit hop\"; exit 3; fi\n"
+            + "echo \"$@\" >> \"$(dirname \"$0\")/../js-ant.log\"\n"
+            + "echo BUILD SUCCESSFUL\n"
+            + "exit 0\n");
+    exportScripts(buildomatic);
+    importScript(buildomatic);
+    vendorWrappers(buildomatic);
+    executable(buildomatic);
+    return pkg;
+  }
+
   /** Turns the package into one that ships no {@code js-upgrade-*} wrapper, only {@code js-ant}. */
   public void removeVendorWrappers() throws IOException {
     for (String name :
