@@ -16,8 +16,9 @@ class CompatMatrixTest {
 
   @Test
   void should_load_unsigned_version_two_matrix_when_bundled() {
-    // version 2 (2026-09-17): Java majors are sets, entries carry Tomcat ranges, paths carry modes
-    assertThat(matrix.matrixVersion()).isEqualTo(2);
+    // version 2 (2026-09-17): Java majors are sets, entries carry Tomcat ranges, paths carry modes;
+    // version 3 (ADR-0003) adds the customization rules
+    assertThat(matrix.matrixVersion()).isEqualTo(3);
     assertThat(matrix.signed()).isFalse();
     assertThat(matrix.entries()).hasSize(6);
     assertThat(matrix.upgradePaths()).isNotEmpty();
