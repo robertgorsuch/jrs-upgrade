@@ -236,7 +236,7 @@ class DoctorOperationTest {
   /**
    * Issue #73: with the database settings read from default_master.properties, an installation
    * whose operator never set a database password must not fail doctor, or the upgrade preflight
-   * that runs it; the database is needed only for hotfixes with SQL.
+   * that runs it; the database is needed only by some upgrade steps.
    */
   @Test
   void should_skip_the_database_check_when_no_password_reference_is_configured() throws Exception {

@@ -172,8 +172,8 @@ public final class DoctorOperation {
     return ReportItem.skip(
         name,
         "no local installation configured: this jrs-upgrade reaches the server over REST only",
-        "REST export and import work from here; run jrs-upgrade on the server for hotfixes, upgrades"
-            + " and vendor tools, or set server.installDir");
+        "REST export and import work from here; run jrs-upgrade on the server for upgrades and"
+            + " vendor tools, or set server.installDir");
   }
 
   private ReportItem guard(String name, DoctorCheck check) {

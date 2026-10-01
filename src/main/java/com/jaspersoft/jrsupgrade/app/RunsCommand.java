@@ -168,7 +168,8 @@ final class RunsCommand implements Runnable {
     @Option(
         names = "--operation",
         paramLabel = "<name>",
-        description = "Only this operation or those under it: hotfix, hotfix.apply, import, ...")
+        description =
+            "Only this operation or those under it: upgrade, upgrade.rollback, import, ...")
     Optional<String> operation = Optional.empty();
 
     @Option(

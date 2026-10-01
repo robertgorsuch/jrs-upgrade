@@ -31,7 +31,7 @@ import picocli.CommandLine.Spec;
     description = "Plan, rehearse, run and roll back JasperReports Server upgrades safely.",
     footer = {
       "Examples for each command: jrs-upgrade <command> --help",
-      "On Windows type bin\\jrs-upgrade.cmd, on Linux bin/jrs-upgrade, where the examples say jrs-upgrade."
+      "Run it as java -jar jrs-upgrade.jar (Java 21) where the examples say jrs-upgrade."
     },
     subcommands = {
       SelfCheckCommand.class,

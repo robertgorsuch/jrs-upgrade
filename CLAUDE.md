@@ -1,6 +1,6 @@
 # jrs-upgrade — agent guide
 
-Upgrade tool for JasperReports Server, split out of jrsctl v2.3.0 (ADR-0001 in `docs/decisions/`). Spec: `docs/spec.md` (the jrsctl sections that govern this code; section numbers are jrsctl's). Backlog: the GitHub issues. Read the ADR before changing the shape of the code; it says what was cut and why.
+Upgrade tool for JasperReports Server, split out of jrsctl v2.3.0. Decisions: `docs/decisions/`: ADR-0001 the extraction (what was cut and why), ADR-0002 multi-hop routes and transit hops, ADR-0003 customization findings from matrix rules, ADR-0004 the retired hotfix ledger. Higher ADR numbers cited in code and docs are jrsctl's. Spec: `docs/spec.md` (the jrsctl sections that govern this code; section numbers are jrsctl's; its header lists what was added since). Backlog: the GitHub issues. Read the ADRs before changing the shape of the code.
 
 ## Build
 
@@ -10,7 +10,7 @@ Upgrade tool for JasperReports Server, split out of jrsctl v2.3.0 (ADR-0001 in `
   2. `scripts/mvn.sh verify` = compile, every unit test, Spotless check, Jacoco floor (`jacoco.line.minimum` in the pom). Minutes, not seconds.
 - The guard tests to run before a commit that adds a step, a command or a JSON field: `IdempotencyCoverageTest` (every `Step` has an idempotency test), `HelpExamplesTest` (every leaf command has examples), `JsonOutputSchemaTest` (every leaf command has a schema and a `--json` scenario), `ExplainTest` (every runnable command has a `### \`jrs-upgrade <path> ...\`` section in `docs/operator-guide.md`).
 - Formatting is google-java-format through Spotless, checked in the `validate` phase, so a slip fails in seconds.
-- Tests tagged `needs-jrs` or `needs-docker` are excluded by default. There is no acceptance suite yet (an issue); the shaded jar is `target/jrs-upgrade.jar`.
+- Tests tagged `needs-jrs` or `needs-docker` are excluded by default. There is no acceptance suite yet (issue #19); the shaded jar is `target/jrs-upgrade.jar`.
 
 ## Layout
 
@@ -18,12 +18,16 @@ One Maven module, package root `com.jaspersoft.jrsupgrade`, with jrsctl's module
 
 | Package | Owns |
 |---|---|
-| `core` | config + schema, secrets, `Platform`, snapshots, compat matrix, redaction, sealed `Event`s, engine (`Plan`, `Step`, `Runner`, retry, cancel, `EventBus`, `Journal`, run lock, `Recovery`), state store (SQLite, implements `Journal`) |
+| `core` | config + schema, secrets, `Platform`, snapshots, compat matrix (`CompatMatrix`: entries, paths, `releases` and `route`; `UpgradeRules`: `jarRules`, `relocations`, `constructs`), redaction, sealed `Event`s, engine (`Plan`, `Step`, `Runner`, retry, cancel, `EventBus`, `Journal`, run lock, `Recovery`), state store (SQLite, implements `Journal`) |
 | `jrs` | REST v2 client and adapter, probes, export/import strategies (REST, vendor CLI), vendor-tool wrappers (buildomatic), keystore inspection, the service stop/start/wait steps every plan shares |
-| `ops` | `upgrade`, `export`, `import`, `customizations` → `Plan`; `init`, `doctor`, `smoke` → report; `PlanRegistry`, `RunService`, `PlanJson`; `ops.hotfix` holds only the two home-path helpers the upgrade still uses |
+| `ops` | `upgrade`, `export`, `import`, `customizations` → `Plan`; `init`, `doctor`, `smoke` → report; `PlanRegistry`, `RunService`, `PlanJson`. `ops.upgrade`: per-hop `UpgradeInput` (transit hops, `in.scoped(id)`, `in.runDir(ctx)`), patched WAR, customer-table guard, Ad Hoc templates. `ops.customizations`: the scan plus the findings against a target (`PackageIndex`, `JarRetirement`, `VendorClassCheck`, `ConstructCheck`, `MergeInputs`; `CustomizationFindings` for the plan). `ops.merge`: the line merge ported from jrs-hotfix. `ops.hotfix` holds only the two home-path helpers the upgrade still uses |
 | `app` | picocli commands, `--json`, progress renderer, guided menu, support bundle, `Main` |
 
 `core.engine` must not import `core.state`: the engine names the journal it needs and the store implements it.
+
+There is no hotfix ledger (ADR-0004): the `hotfixes_installed` and `hotfix_files` tables stay in the schema for homes jrsctl wrote, but nothing may read or write them. Hotfix facts come from the installed files. Retention keeps every run whose operation is not jrs-upgrade's own.
+
+Customization rules are data: a new release line's jar verdicts, relocations or override constructs go into `compat/matrix.yaml` with a `source`, not into code.
 
 ## Non-negotiables
 
@@ -43,7 +47,7 @@ Java 21; records + sealed interfaces; pattern-matching `switch` with no `default
 
 ## Exit codes
 
-0 ok · 1 usage · 2 precheck/doctor/fingerprint, nothing mutated · 3 failed + rolled back · 4 failed, rollback incomplete · 5 cancelled · 6 unsupported · 7 signature · 8 recovery required · 9 lock held. Constants in `app/ExitCodes`.
+0 ok · 1 usage · 2 precheck/doctor/fingerprint, nothing mutated · 3 failed + rolled back · 4 failed, rollback incomplete · 5 cancelled · 6 unsupported · 7 reserved (jrsctl's signature code; nothing returns it) · 8 recovery required · 9 lock held. Constants in `app/ExitCodes`.
 
 ## Branding
 
