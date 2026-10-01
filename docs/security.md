@@ -61,11 +61,11 @@ Review `config-redacted.yaml` for host names and paths you consider sensitive be
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a security problem. Report it privately to the maintainers of this
-repository. GitHub's private vulnerability reporting (the Security tab, "Report a vulnerability")
-is not enabled for it yet. Include the jrs-upgrade version (`jrs-upgrade --version`), the operating
-system, and what an attacker can do; a support bundle is redacted and safe to attach. Expect an
-acknowledgement before a fix is discussed in public, and a fixed version before the report is.
+Do not open a public issue for a security problem. Report it privately through GitHub's private
+vulnerability reporting (the repository's Security tab, "Report a vulnerability"), which reaches
+the maintainers without publishing the report. `SECURITY.md` at the repository root says what to
+include and what happens next. A support bundle is redacted and safe to attach once you have
+reviewed its host names and paths.
 
 ## Hardening
 
