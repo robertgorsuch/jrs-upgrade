@@ -1,5 +1,5 @@
 # jrs-upgrade compatibility matrix (spec 5.7).
-# matrix version 2, unsigned: it ships inside the same artifact as any key that could verify it,
+# matrix version 3 (adds the customization rules at the end, ADR-0003), unsigned: it ships inside the same artifact as any key that could verify it,
 # so a signature would add no assurance. Version ranges use npm/semver syntax as understood by
 # semver4j; JRS versions with two components (e.g. "8.2") are coerced to x.y.0 before matching.
 #
@@ -9,7 +9,7 @@
 # every JDK major the platform sheet lists for the release line (certified or runtime), because
 # buildomatic runs with the JDK on JAVA_HOME. `tomcat` lists the Tomcat versions the sheet certifies
 # for the line; 10.0 moved to Jakarta EE and runs only on Tomcat 10.1.24+ / 11.0.11+.
-matrixVersion: 2
+matrixVersion: 3
 signed: false
 
 entries:
@@ -104,3 +104,113 @@ upgradePaths:
 # hop samedb) and asks for one unpacked package per stop. The NGRA 8.2.0 to 10.1.0 guide (section 4)
 # takes 8.2.0 -> 10.0.0 (newdb) -> 10.1.0 (samedb).
 releases: ["7.1.0", "7.2.0", "7.5.0", "7.8.0", "7.9.0", "8.0.0", "8.1.0", "8.2.0", "9.0.0", "10.0.0", "10.1.0"]
+
+# ADR-0003: what a customization has to follow between release lines, as data. Every rule applies
+# when the running version satisfies `from` and the target satisfies `to` (an absent range matches
+# every version) and names its `source`. Paths are globs relative to the webapp (`*` within one
+# directory, `**` across them); `element`, `text`, `key`, `value` and attribute values are Java
+# regular expressions matched against the whole value. The rules below were taken from the NGRA
+# 8.2.0 to 10.1.0 upgrade guide (2026-10-01) as the issues quote it; where a rule should also cite
+# a vendor guide page, that page is still to be added.
+
+# Issue #4: named verdicts for jars under WEB-INF/lib the vendor does not ship.
+jarRules:
+  - id: progress-datadirect-drivers
+    from: "<9.0.0"
+    to: ">=9.0.0"
+    match: "TI*.jar"
+    verdict: replace
+    replacement: "the database vendor's own JDBC driver"
+    note: >-
+      the Progress DataDirect drivers (TI*.jar) are not shipped from 9.0; install the database
+      vendor's driver and re-point the data sources that used these
+    source: "NGRA upgrade guide section 3.5 (issue #4)"
+
+# Issue #6: files and settings that moved, so a reapply conflict says where the setting went.
+relocations:
+  - id: ehcache-xml
+    from: "<10.0.0"
+    to: ">=10.0.0"
+    kind: removed
+    path: "WEB-INF/ehcache.xml"
+    newKey: "appCacheType in default_master.properties"
+    hint: >-
+      removed in 10.0; the cache provider is appCacheType in default_master.properties, and the
+      Ehcache 3 configuration lives in the *-ehcache.xml files
+    source: "NGRA upgrade guide section 3.2 (issue #6)"
+  - id: esapi-config
+    from: "<10.0.0"
+    to: ">=10.0.0"
+    kind: moved
+    path: "WEB-INF/esapi/**"
+    newPath: "WEB-INF/classes/esapi/"
+    hint: "the ESAPI configuration lives under WEB-INF/classes/esapi/"
+    source: "NGRA upgrade guide section 3.2 (issue #6)"
+  - id: csrfguard-properties
+    from: "<10.0.0"
+    to: ">=10.0.0"
+    kind: mechanism
+    path: "**/*csrfguard*.properties"
+    newPath: "the target's CSRFGuard 4 properties file"
+    hint: >-
+      CSRFGuard 3 to 4 renamed its method properties; carry each change over into the target's
+      file under its new name rather than copying the old file
+    source: "NGRA upgrade guide section 3.2 (issue #6)"
+
+# Issue #8: constructs inside override files the target handles differently.
+constructs:
+  - id: session-factory-annotated-classes
+    to: ">=10.0.0"
+    files: ["WEB-INF/**.xml"]
+    element: "property"
+    attributes: { name: "annotatedClasses" }
+    within: { element: "bean", attributes: { id: "sessionFactory" } }
+    hint: >-
+      annotatedClasses on the vendor sessionFactory is not supported from 10.0 (Hibernate 6):
+      list the entities through the persistence.xml mechanism instead
+    source: "NGRA upgrade guide sections 3.4 and 7 (issue #8)"
+  - id: web-xml-javax-classes
+    to: ">=10.0.0"
+    files: ["WEB-INF/web.xml"]
+    element: "servlet-class|filter-class|listener-class"
+    text: '\s*javax\..*'
+    hint: "10.0 runs on Jakarta EE 10: a javax.* servlet, filter or listener class needs its jakarta.* build"
+    source: "NGRA upgrade guide sections 3.2 and 7 (issue #8)"
+  - id: spring-security-versioned-schema
+    to: ">=10.0.0"
+    files: ["WEB-INF/**.xml"]
+    element: ".*"
+    attributes: { schemaLocation: '(?s).*spring-security-[0-9][0-9.]*\.xsd.*' }
+    hint: >-
+      a versioned Spring Security schema; 10.0 runs Spring Security 6, so use the schema location
+      the target's applicationContext-security.xml uses
+    source: "NGRA upgrade guide section 3.2 (issue #8)"
+  - id: custom-security-filter-chain
+    to: ">=10.0.0"
+    files: ["WEB-INF/**.xml"]
+    element: "filter-chain"
+    hint: >-
+      a custom security filter-chain entry; compare it with the target's
+      applicationContext-security.xml, whose filter-chain form changed with Spring Security 6
+    source: "NGRA upgrade guide sections 3.2 and 7 (issue #8)"
+  - id: custom-intercept-url
+    to: ">=10.0.0"
+    files: ["WEB-INF/**.xml"]
+    element: "intercept-url"
+    hint: >-
+      a custom intercept-url rule; re-check it against the target's security configuration
+      (Spring Security 6)
+    source: "NGRA upgrade guide sections 3.2 and 7 (issue #8)"
+  - id: csrfguard-unprotected-methods
+    to: ">=10.0.0"
+    files: ["**/*csrfguard*.properties"]
+    key: 'org\.owasp\.csrfguard\.UnprotectedMethods'
+    hint: "CSRFGuard 4 has a different property set; carry UnprotectedMethods over under the target file's name for it"
+    source: "NGRA upgrade guide sections 3.2 and 7 (issue #8)"
+  - id: csrfguard-token-per-page-off
+    to: ">=10.0.0"
+    files: ["**/*csrfguard*.properties"]
+    key: 'org\.owasp\.csrfguard\.TokenPerPage'
+    value: '(?i)\s*false\s*'
+    hint: "the target forces TokenPerPage; pages that relied on it being off need checking"
+    source: "NGRA upgrade guide sections 3.2 and 7 (issue #8)"

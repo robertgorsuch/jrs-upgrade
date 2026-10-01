@@ -436,6 +436,29 @@ class UpgradeStepIdempotencyTest {
     }
   }
 
+  /** Issue #10: the vendor's import-minimal runs once per run. */
+  @Test
+  void should_import_the_minimal_catalog_once_when_restore_vendor_templates_executes_twice()
+      throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
+      AdhocTemplatesTest.catalog(f);
+      Plan plan =
+          f.ops().planUpgrade(AdhocTemplatesTest.options(f).withRestoreVendorTemplates(true));
+      assertReexecutionConverges(f, plan, "r-tpl", "restore-vendor-templates");
+      assertThat(f.vendorLogText().split("import-minimal-pro", -1)).hasSize(2);
+    }
+  }
+
+  @Test
+  void should_converge_when_restore_vendor_templates_compensates_twice() throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
+      AdhocTemplatesTest.catalog(f);
+      Plan plan =
+          f.ops().planUpgrade(AdhocTemplatesTest.options(f).withRestoreVendorTemplates(true));
+      assertCompensationConverges(f, plan, "r-tpl-c", "restore-vendor-templates");
+    }
+  }
+
   /** Issue #3: the structure dump is rewritten with the same content. */
   @Test
   void should_write_the_same_dump_when_dump_foreign_schema_executes_twice() throws Exception {

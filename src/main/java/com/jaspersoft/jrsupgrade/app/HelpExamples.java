@@ -243,7 +243,11 @@ final class HelpExamples {
             new Example(
                 "Deploy the vendor's patched WAR; re-create the customer tables newdb drops",
                 "jrs-upgrade upgrade --to 10.1.0 --package /opt/dist/jasperreports-server-pro-10.1.0-bin"
-                    + " --war /opt/dist/jasperserver-pro-10.1.0-hf.war --custom-ddl /opt/ngra/ddl")));
+                    + " --war /opt/dist/jasperserver-pro-10.1.0-hf.war --custom-ddl /opt/ngra/ddl"),
+            new Example(
+                "From 8.2: put back the vendor's Ad Hoc templates the old export overwrites",
+                "jrs-upgrade upgrade --to 9.0.0 --package /opt/dist/jasperreports-server-pro-9.0.0-bin"
+                    + " --restore-vendor-templates")));
     m.put(
         "upgrade rollback",
         List.of(
@@ -266,7 +270,11 @@ final class HelpExamples {
                 "jrs-upgrade customizations scan --vendor /opt/dist/jasperreports-server-pro-10.0.0-bin"),
             new Example(
                 "Register everything found, without asking",
-                "jrs-upgrade customizations scan --vendor /opt/dist/jasperserver-pro.war --register")));
+                "jrs-upgrade customizations scan --vendor /opt/dist/jasperserver-pro.war --register"),
+            new Example(
+                "Say what becomes of each change on 10.1: jar verdicts and the matrix's rules",
+                "jrs-upgrade customizations scan --vendor /opt/dist/jasperreports-server-pro-8.2.0-bin"
+                    + " --target /opt/dist/jasperreports-server-pro-10.1.0-bin")));
     m.put(
         "customizations unregister",
         List.of(

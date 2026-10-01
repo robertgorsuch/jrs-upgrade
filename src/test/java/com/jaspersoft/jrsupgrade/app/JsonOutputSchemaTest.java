@@ -801,6 +801,35 @@ class JsonOutputSchemaTest {
             }));
     s.add(
         of(
+            "customizations scan against a target",
+            "customizations scan",
+            0,
+            dir -> {
+              serverHome(dir);
+              Path lib =
+                  Files.createDirectories(
+                      dir.resolve("jrs/apache-tomcat/webapps/jasperserver-pro/WEB-INF/lib"));
+              Files.writeString(lib.resolve("commons-lang3-3.12.0.jar"), "jar");
+              Path vendor =
+                  Files.createDirectories(
+                      dir.resolve("jasperreports-server-pro-8.2.0-bin/jasperserver-pro/WEB-INF"));
+              Path target =
+                  Files.createDirectories(
+                      dir.resolve(
+                          "jasperreports-server-pro-10.1.0-bin/jasperserver-pro/WEB-INF/lib"));
+              Files.writeString(target.resolve("commons-lang3-3.14.0.jar"), "jar");
+              return run(
+                  join(
+                      serverArgs(dir),
+                      "customizations",
+                      "scan",
+                      "--vendor",
+                      vendor.getParent().getParent().toString(),
+                      "--target",
+                      target.getParent().getParent().getParent().toString()));
+            }));
+    s.add(
+        of(
             "customizations scan of a path without a webapp",
             "customizations scan",
             2,

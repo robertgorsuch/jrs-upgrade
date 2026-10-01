@@ -3,6 +3,7 @@ package com.jaspersoft.jrsupgrade.ops.customizations;
 import com.jaspersoft.jrsupgrade.core.state.Customization;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -137,6 +138,155 @@ public interface CustomizationOperations {
    * distribution, its webapp directory or its war) and lists what differs; read-only (#72).
    */
   Scan scan(Path vendor);
+
+  /** What {@link #assess} says to do with a jar the site added or patched (issue #4). */
+  enum JarVerdict {
+    /** The target ships the same artifact, as new or newer. */
+    DROP,
+    /** The target ships nothing like it: keep it as the site's own dependency. */
+    KEEP,
+    /** A named rule of the matrix replaces it with something else. */
+    REPLACE,
+    /** The target ships the same artifact, older: two versions would be on the class path. */
+    REVIEW,
+    /** No coordinates to judge by. */
+    UNRESOLVED
+  }
+
+  /** One jar of {@link Findings}: its file name, what it says it is, and the verdict. */
+  record JarFinding(
+      String jar,
+      Optional<String> coordinates,
+      JarVerdict verdict,
+      Optional<String> targetJar,
+      String reason) {
+    public JarFinding {
+      Objects.requireNonNull(jar, "jar");
+      Objects.requireNonNull(coordinates, "coordinates");
+      Objects.requireNonNull(verdict, "verdict");
+      Objects.requireNonNull(targetJar, "targetJar");
+      Objects.requireNonNull(reason, "reason");
+    }
+  }
+
+  /** Whether the target still holds a vendor type the site's code builds on (issue #5). */
+  enum ClassStatus {
+    PRESENT,
+    /** Gone from its package, but a class of the same simple name exists elsewhere. */
+    MOVED,
+    MISSING,
+    /** The jar could not be read; nothing is known about it. */
+    UNREADABLE
+  }
+
+  /**
+   * One vendor type a site jar (or {@code WEB-INF/classes}) refers to: how it is used ("extended by
+   * com.example.Filter"), and where the target has it.
+   */
+  record ClassFinding(
+      String jar, String vendorType, String usedBy, ClassStatus status, String detail) {
+    public ClassFinding {
+      Objects.requireNonNull(jar, "jar");
+      Objects.requireNonNull(vendorType, "vendorType");
+      Objects.requireNonNull(usedBy, "usedBy");
+      Objects.requireNonNull(status, "status");
+      Objects.requireNonNull(detail, "detail");
+    }
+  }
+
+  /** A site jar that refers to javax packages Jakarta EE 10 renamed: it needs a recompile. */
+  record JakartaFinding(String jar, Map<String, Integer> javaxReferences) {
+    public JakartaFinding {
+      Objects.requireNonNull(jar, "jar");
+      javaxReferences = Map.copyOf(javaxReferences);
+    }
+  }
+
+  /** A changed or added file whose setting moved in the target (issue #6). */
+  record RelocationFinding(String path, String rule, String kind, String description) {
+    public RelocationFinding {
+      Objects.requireNonNull(path, "path");
+      Objects.requireNonNull(rule, "rule");
+      Objects.requireNonNull(kind, "kind");
+      Objects.requireNonNull(description, "description");
+    }
+  }
+
+  /**
+   * A construct inside a changed or added file that the target handles differently (issue #8): the
+   * file, the line (0 when unknown), the construct as found, and the target's form.
+   */
+  record ConstructFinding(
+      String path, String rule, int line, String construct, String hint, String source) {
+    public ConstructFinding {
+      Objects.requireNonNull(path, "path");
+      Objects.requireNonNull(rule, "rule");
+      Objects.requireNonNull(construct, "construct");
+      Objects.requireNonNull(hint, "hint");
+      Objects.requireNonNull(source, "source");
+    }
+  }
+
+  /** How the three-way merge of a customized file came out (issue #6). */
+  enum MergeStatus {
+    /** Both sides' changes applied without overlap. */
+    CLEAN,
+    /** Both sides changed the same lines; the merged file holds conflict markers. */
+    CONFLICT,
+    /** Not text; not merged. */
+    BINARY,
+    /** The target has no file at this path; see the relocations. */
+    NOT_IN_TARGET
+  }
+
+  /** One customized file merged three ways; {@code merged} is where the result was written. */
+  record MergeFinding(String path, MergeStatus status, int conflicts, Optional<String> merged) {
+    public MergeFinding {
+      Objects.requireNonNull(path, "path");
+      Objects.requireNonNull(status, "status");
+      Objects.requireNonNull(merged, "merged");
+    }
+  }
+
+  /**
+   * What becomes of a scan's changed and added files on the target version (ADR-0003): {@code
+   * sourceVersion} is the running version, {@code targetVersion} the target's.
+   */
+  record Findings(
+      Path targetWebapp,
+      String sourceVersion,
+      String targetVersion,
+      List<JarFinding> jars,
+      List<ClassFinding> classes,
+      List<JakartaFinding> jakarta,
+      List<RelocationFinding> relocations,
+      List<MergeFinding> merges,
+      List<ConstructFinding> constructs) {
+    public Findings {
+      Objects.requireNonNull(targetWebapp, "targetWebapp");
+      Objects.requireNonNull(sourceVersion, "sourceVersion");
+      Objects.requireNonNull(targetVersion, "targetVersion");
+      jars = List.copyOf(jars);
+      classes = List.copyOf(classes);
+      jakarta = List.copyOf(jakarta);
+      relocations = List.copyOf(relocations);
+      merges = List.copyOf(merges);
+      constructs = List.copyOf(constructs);
+    }
+  }
+
+  /**
+   * Judges {@code scan}'s changed and added files against the target distribution {@code target}
+   * (its unpacked directory, webapp directory or WAR) with the matrix's rules. {@code
+   * targetVersion} overrides the version the target states, and is required when it states none.
+   * Nothing is written, except the three-way merge files under {@code mergeDir} when it is given.
+   */
+  Findings assess(Scan scan, Path target, Optional<String> targetVersion, Optional<Path> mergeDir);
+
+  /** {@link #assess(Scan, Path, Optional, Optional)} writing nothing. */
+  default Findings assess(Scan scan, Path target, Optional<String> targetVersion) {
+    return assess(scan, target, targetVersion, Optional.empty());
+  }
 
   /**
    * Registers every {@link Change#CHANGED} and {@link Change#ADDED} file of {@code scan} that is

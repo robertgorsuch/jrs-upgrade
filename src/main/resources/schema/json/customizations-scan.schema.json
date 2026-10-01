@@ -35,6 +35,109 @@
         }
       }
     },
+    "findings": {
+      "type": "object",
+      "description": "Present with --target: what becomes of the changed and added files on the target version (ADR-0003).",
+      "additionalProperties": false,
+      "required": ["targetWebapp", "sourceVersion", "targetVersion", "jars", "classes", "jakarta", "relocations", "merges", "constructs"],
+      "properties": {
+        "targetWebapp": { "type": "string" },
+        "sourceVersion": { "type": "string" },
+        "targetVersion": { "type": "string" },
+        "jars": {
+          "type": "array",
+          "description": "Issue #4: one verdict per jar under WEB-INF/lib the vendor copy lacks or the site patched.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["jar", "verdict", "reason"],
+            "properties": {
+              "jar": { "type": "string" },
+              "coordinates": { "type": "string", "description": "groupId:artifactId:version, or artifactId:version from the file name." },
+              "verdict": { "enum": ["DROP", "KEEP", "REPLACE", "REVIEW", "UNRESOLVED"] },
+              "targetJar": { "type": "string", "description": "The target's jar of the same artifact." },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "classes": {
+          "type": "array",
+          "description": "Issue #5: the vendor types the site's jars and WEB-INF/classes refer to, and where the target has them.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["jar", "vendorType", "usedBy", "status", "detail"],
+            "properties": {
+              "jar": { "type": "string", "description": "A jar's file name, or WEB-INF/classes." },
+              "vendorType": { "type": "string" },
+              "usedBy": { "type": "string", "description": "How the site's code uses it: extended, implemented or used, and by which class." },
+              "status": { "enum": ["PRESENT", "MOVED", "MISSING", "UNREADABLE"] },
+              "detail": { "type": "string" }
+            }
+          }
+        },
+        "jakarta": {
+          "type": "array",
+          "description": "Issue #5: for a 10.0 or later target, the site jars that refer to javax packages Jakarta EE 10 renamed and need a recompile.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["jar", "javaxReferences"],
+            "properties": {
+              "jar": { "type": "string" },
+              "javaxReferences": { "type": "object", "additionalProperties": { "type": "integer" } }
+            }
+          }
+        },
+        "relocations": {
+          "type": "array",
+          "description": "Issue #6: changed and added files whose setting moved in the target, from the matrix's relocations.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "rule", "kind", "description"],
+            "properties": {
+              "path": { "type": "string" },
+              "rule": { "type": "string" },
+              "kind": { "enum": ["REMOVED", "MOVED", "MECHANISM"] },
+              "description": { "type": "string", "description": "Where the setting went, and the source of the rule." }
+            }
+          }
+        },
+        "merges": {
+          "type": "array",
+          "description": "Issue #6: the three-way merge of each changed file the target also ships.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "status", "conflicts"],
+            "properties": {
+              "path": { "type": "string" },
+              "status": { "enum": ["CLEAN", "CONFLICT", "BINARY", "NOT_IN_TARGET"] },
+              "conflicts": { "type": "integer" },
+              "merged": { "type": "string", "description": "The merged file, with --merge-dir." }
+            }
+          }
+        },
+        "constructs": {
+          "type": "array",
+          "description": "Issue #8: constructs inside changed and added override files that the target handles differently, from the matrix's construct rules.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "rule", "line", "construct", "hint", "source"],
+            "properties": {
+              "path": { "type": "string" },
+              "rule": { "type": "string" },
+              "line": { "type": "integer", "description": "1-based; 0 when unknown." },
+              "construct": { "type": "string" },
+              "hint": { "type": "string", "description": "The target's form." },
+              "source": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
     "registered": {
       "type": "array",
       "description": "Customizations registered by this run (--register).",

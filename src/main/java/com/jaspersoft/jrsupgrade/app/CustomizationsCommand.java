@@ -302,6 +302,31 @@ final class CustomizationsCommand implements Runnable {
         description = "Register every changed and added file that is not registered yet.")
     boolean register;
 
+    @picocli.CommandLine.Option(
+        names = "--target",
+        paramLabel = "<path>",
+        description =
+            "The distribution of the version to upgrade to (unpacked, its webapp directory, or"
+                + " the .war): also say what becomes of each changed and added file there, from"
+                + " the matrix's rules (ADR-0003).")
+    Path target;
+
+    @picocli.CommandLine.Option(
+        names = "--to",
+        paramLabel = "<version>",
+        description = "The target's version, when --target does not state it.")
+    String to;
+
+    @picocli.CommandLine.Option(
+        names = "--merge-dir",
+        paramLabel = "<dir>",
+        description =
+            "With --target: write a three-way merge of each changed file the target also ships"
+                + " under <dir>, at its path in the webapp: .base (the running version's vendor"
+                + " file), .mine (yours), .theirs (the target's), .merged and .patch (theirs to"
+                + " merged).")
+    Path mergeDir;
+
     @Override
     public Integer call() {
       PrintWriter out = spec.commandLine().getOut();
@@ -311,10 +336,17 @@ final class CustomizationsCommand implements Runnable {
         CustomizationOperations ops = open(boot.services());
         CustomizationOperations.Scan scan;
         List<CustomizationOperations.TomcatEntry> tomcatFiles = List.of();
+        Optional<CustomizationOperations.Findings> findings = Optional.empty();
         try {
           scan = ops.scan(vendor);
           if (tomcat) {
             tomcatFiles = ops.scanTomcat();
+          }
+          if (target != null) {
+            findings =
+                Optional.of(
+                    ops.assess(
+                        scan, target, Optional.ofNullable(to), Optional.ofNullable(mergeDir)));
           }
         } catch (CustomizationException e) {
           return refused(out, err, global.json(), e);
@@ -334,6 +366,7 @@ final class CustomizationsCommand implements Runnable {
           if (tomcat) {
             printTomcat(out, redactor, tomcatFiles);
           }
+          findings.ifPresent(f -> printFindings(out, redactor, f));
         }
         boolean doRegister = register || global.yes();
         if (!doRegister && !global.json() && !global.nonInteractive() && candidates > 0) {
@@ -390,6 +423,7 @@ final class CustomizationsCommand implements Runnable {
             }
             tree.put("tomcat", files);
           }
+          findings.ifPresent(f -> tree.put("findings", findingsTree(f)));
           out.println(redactor.redact(JsonOut.write(tree)));
         } else if (!registered.isEmpty()) {
           out.println(
@@ -423,6 +457,158 @@ final class CustomizationsCommand implements Runnable {
       out.println(
           "register one with: jrs-upgrade customizations register <tomcatDir>/<path>; an upgrade then"
               + " checks it, but does not copy it to a different Tomcat (--tomcat-dir)");
+    }
+
+    private static void printFindings(
+        PrintWriter out, Redactor redactor, CustomizationOperations.Findings f) {
+      out.println();
+      out.println(
+          "Against the target "
+              + f.targetWebapp()
+              + " ("
+              + f.sourceVersion()
+              + " -> "
+              + f.targetVersion()
+              + "):");
+      out.println("jars under WEB-INF/lib the vendor copy lacks or the site patched:");
+      if (f.jars().isEmpty()) {
+        out.println("  none");
+      } else {
+        TextTable table = new TextTable().row("VERDICT", "JAR", "WHY");
+        for (CustomizationOperations.JarFinding j : f.jars()) {
+          table.row(j.verdict().name(), j.jar(), j.reason());
+        }
+        table.lines().forEach(l -> out.println(redactor.redact("  " + l)));
+      }
+      out.println("vendor classes the site's code builds on (issue #5):");
+      if (f.classes().isEmpty()) {
+        out.println("  none");
+      } else {
+        TextTable table = new TextTable().row("STATUS", "IN", "VENDOR TYPE", "USED", "WHERE");
+        for (CustomizationOperations.ClassFinding c : f.classes()) {
+          table.row(c.status().name(), c.jar(), c.vendorType(), c.usedBy(), c.detail());
+        }
+        table.lines().forEach(l -> out.println(redactor.redact("  " + l)));
+      }
+      out.println("files and settings that moved in the target (issue #6):");
+      if (f.relocations().isEmpty()) {
+        out.println("  none");
+      }
+      for (CustomizationOperations.RelocationFinding r : f.relocations()) {
+        out.println(redactor.redact("  " + r.path() + ": " + r.description()));
+      }
+      out.println("constructs the target handles differently (issue #8):");
+      if (f.constructs().isEmpty()) {
+        out.println("  none");
+      }
+      for (CustomizationOperations.ConstructFinding c : f.constructs()) {
+        out.println(
+            redactor.redact(
+                "  "
+                    + c.path()
+                    + (c.line() > 0 ? ":" + c.line() : "")
+                    + " "
+                    + c.construct()
+                    + ": "
+                    + c.hint()
+                    + " ("
+                    + c.source()
+                    + ")"));
+      }
+      out.println("three-way merges of the changed files (issue #6):");
+      if (f.merges().isEmpty()) {
+        out.println("  none");
+      } else {
+        TextTable table = new TextTable().row("MERGE", "PATH", "RESULT");
+        for (CustomizationOperations.MergeFinding m : f.merges()) {
+          table.row(
+              m.status().name()
+                  + (m.status() == CustomizationOperations.MergeStatus.CONFLICT
+                      ? " (" + m.conflicts() + ")"
+                      : ""),
+              m.path(),
+              m.merged().orElse("(pass --merge-dir to write it)"));
+        }
+        table.lines().forEach(l -> out.println(redactor.redact("  " + l)));
+      }
+      for (CustomizationOperations.JakartaFinding j : f.jakarta()) {
+        out.println(
+            redactor.redact(
+                "  RECOMPILE "
+                    + j.jar()
+                    + " for Jakarta EE 10 (jakarta.*): it refers to "
+                    + new java.util.TreeMap<>(j.javaxReferences())));
+      }
+    }
+
+    static Map<String, Object> findingsTree(CustomizationOperations.Findings f) {
+      Map<String, Object> tree = new LinkedHashMap<>();
+      tree.put("targetWebapp", f.targetWebapp().toString());
+      tree.put("sourceVersion", f.sourceVersion());
+      tree.put("targetVersion", f.targetVersion());
+      List<Map<String, Object>> jars = new ArrayList<>();
+      for (CustomizationOperations.JarFinding j : f.jars()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("jar", j.jar());
+        j.coordinates().ifPresent(c -> row.put("coordinates", c));
+        row.put("verdict", j.verdict().name());
+        j.targetJar().ifPresent(t -> row.put("targetJar", t));
+        row.put("reason", j.reason());
+        jars.add(row);
+      }
+      tree.put("jars", jars);
+      List<Map<String, Object>> classes = new ArrayList<>();
+      for (CustomizationOperations.ClassFinding c : f.classes()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("jar", c.jar());
+        row.put("vendorType", c.vendorType());
+        row.put("usedBy", c.usedBy());
+        row.put("status", c.status().name());
+        row.put("detail", c.detail());
+        classes.add(row);
+      }
+      tree.put("classes", classes);
+      List<Map<String, Object>> jakarta = new ArrayList<>();
+      for (CustomizationOperations.JakartaFinding j : f.jakarta()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("jar", j.jar());
+        row.put("javaxReferences", new java.util.TreeMap<>(j.javaxReferences()));
+        jakarta.add(row);
+      }
+      tree.put("jakarta", jakarta);
+      List<Map<String, Object>> relocations = new ArrayList<>();
+      for (CustomizationOperations.RelocationFinding r : f.relocations()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("path", r.path());
+        row.put("rule", r.rule());
+        row.put("kind", r.kind());
+        row.put("description", r.description());
+        relocations.add(row);
+      }
+      tree.put("relocations", relocations);
+      List<Map<String, Object>> merges = new ArrayList<>();
+      for (CustomizationOperations.MergeFinding m : f.merges()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("path", m.path());
+        row.put("status", m.status().name());
+        row.put("conflicts", m.conflicts());
+        m.merged().ifPresent(p -> row.put("merged", p));
+        merges.add(row);
+      }
+      tree.put("merges", merges);
+      List<Map<String, Object>> constructs = new ArrayList<>();
+      for (CustomizationOperations.ConstructFinding c : f.constructs()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("path", c.path());
+        row.put("rule", c.rule());
+        row.put("line", c.line());
+        row.put("construct", c.construct());
+        row.put("hint", c.hint());
+        row.put("source", c.source());
+        constructs.add(row);
+      }
+      tree.put("constructs", constructs);
+      return tree;
     }
 
     private static void print(

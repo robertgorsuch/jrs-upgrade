@@ -231,7 +231,9 @@ public final class PlanRegistry {
         // and one of a single hop (issue #1)
         transitPackages(args),
         // and one that re-applies no DDL (issue #3)
-        text(args, "customDdl").map(Path::of));
+        text(args, "customDdl").map(Path::of),
+        // and one that leaves the templates as the import left them (issue #10)
+        args.path("restoreVendorTemplates").asBoolean(false));
   }
 
   private static List<Path> transitPackages(JsonNode args) {
@@ -287,6 +289,7 @@ public final class PlanRegistry {
     } else {
       node.putNull("customDdl");
     }
+    node.put("restoreVendorTemplates", options.restoreVendorTemplates());
     return Json.write(node);
   }
 

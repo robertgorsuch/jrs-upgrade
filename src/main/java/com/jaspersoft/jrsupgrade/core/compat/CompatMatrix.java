@@ -102,6 +102,7 @@ public final class CompatMatrix {
   private final List<Entry> entries;
   private final List<UpgradePath> upgradePaths;
   private final List<String> releases;
+  private final UpgradeRules rules;
 
   public CompatMatrix(
       int matrixVersion, boolean signed, List<Entry> entries, List<UpgradePath> upgradePaths) {
@@ -114,11 +115,22 @@ public final class CompatMatrix {
       List<Entry> entries,
       List<UpgradePath> upgradePaths,
       List<String> releases) {
+    this(matrixVersion, signed, entries, upgradePaths, releases, UpgradeRules.NONE);
+  }
+
+  public CompatMatrix(
+      int matrixVersion,
+      boolean signed,
+      List<Entry> entries,
+      List<UpgradePath> upgradePaths,
+      List<String> releases,
+      UpgradeRules rules) {
     this.matrixVersion = matrixVersion;
     this.signed = signed;
     this.entries = List.copyOf(entries);
     this.upgradePaths = List.copyOf(upgradePaths);
     this.releases = List.copyOf(releases);
+    this.rules = Objects.requireNonNull(rules, "rules");
   }
 
   /** Loads the bundled matrix; a missing or malformed resource is a packaging error. */
@@ -174,7 +186,8 @@ public final class CompatMatrix {
         file.upgradePaths().stream()
             .map(p -> new UpgradePath(p.from(), p.to(), lowers(p.modes())))
             .toList();
-    return new CompatMatrix(file.matrixVersion(), file.signed(), entries, paths, file.releases());
+    return new CompatMatrix(
+        file.matrixVersion(), file.signed(), entries, paths, file.releases(), rules(file));
   }
 
   public int matrixVersion() {
@@ -191,6 +204,71 @@ public final class CompatMatrix {
 
   public List<UpgradePath> upgradePaths() {
     return upgradePaths;
+  }
+
+  /** The rules a customization has to follow between release lines (ADR-0003). */
+  public UpgradeRules rules() {
+    return rules;
+  }
+
+  private static UpgradeRules rules(MatrixFile file) {
+    List<UpgradeRules.JarRule> jars =
+        file.jarRules().stream()
+            .map(
+                r ->
+                    new UpgradeRules.JarRule(
+                        r.id(),
+                        crossing(r.from(), r.to()),
+                        r.match(),
+                        UpgradeRules.JarVerdict.valueOf(upper(r.verdict())),
+                        Optional.ofNullable(r.replacement()),
+                        r.note(),
+                        r.source()))
+            .toList();
+    List<UpgradeRules.Relocation> relocations =
+        file.relocations().stream()
+            .map(
+                r ->
+                    new UpgradeRules.Relocation(
+                        r.id(),
+                        crossing(r.from(), r.to()),
+                        UpgradeRules.RelocationKind.valueOf(upper(r.kind())),
+                        r.path(),
+                        Optional.ofNullable(r.newPath()),
+                        Optional.ofNullable(r.newKey()),
+                        r.hint(),
+                        r.source()))
+            .toList();
+    List<UpgradeRules.ConstructRule> constructs =
+        file.constructs().stream()
+            .map(
+                r ->
+                    new UpgradeRules.ConstructRule(
+                        r.id(),
+                        crossing(r.from(), r.to()),
+                        r.files() == null ? List.of() : r.files(),
+                        Optional.ofNullable(r.element())
+                            .map(
+                                e ->
+                                    new UpgradeRules.ElementMatch(
+                                        e, r.attributes() == null ? Map.of() : r.attributes())),
+                        Optional.ofNullable(r.text()),
+                        Optional.ofNullable(r.within())
+                            .map(
+                                w ->
+                                    new UpgradeRules.ElementMatch(
+                                        w.element(),
+                                        w.attributes() == null ? Map.of() : w.attributes())),
+                        Optional.ofNullable(r.key()),
+                        Optional.ofNullable(r.value()),
+                        r.hint(),
+                        r.source()))
+            .toList();
+    return new UpgradeRules(jars, relocations, constructs);
+  }
+
+  private static UpgradeRules.Crossing crossing(String from, String to) {
+    return new UpgradeRules.Crossing(Optional.ofNullable(from), Optional.ofNullable(to));
   }
 
   /** The released versions a route may stop at, as the matrix lists them. */
@@ -401,13 +479,56 @@ public final class CompatMatrix {
       boolean signed,
       List<EntryYaml> entries,
       List<PathYaml> upgradePaths,
-      List<String> releases) {
+      List<String> releases,
+      List<JarRuleYaml> jarRules,
+      List<RelocationYaml> relocations,
+      List<ConstructYaml> constructs) {
     MatrixFile {
       entries = entries == null ? List.of() : entries;
       upgradePaths = upgradePaths == null ? List.of() : upgradePaths;
       releases = releases == null ? List.of() : releases;
+      jarRules = jarRules == null ? List.of() : jarRules;
+      relocations = relocations == null ? List.of() : relocations;
+      constructs = constructs == null ? List.of() : constructs;
     }
   }
+
+  record JarRuleYaml(
+      String id,
+      String from,
+      String to,
+      String match,
+      String verdict,
+      String replacement,
+      String note,
+      String source) {}
+
+  record RelocationYaml(
+      String id,
+      String from,
+      String to,
+      String kind,
+      String path,
+      String newPath,
+      String newKey,
+      String hint,
+      String source) {}
+
+  record WithinYaml(String element, Map<String, String> attributes) {}
+
+  record ConstructYaml(
+      String id,
+      String from,
+      String to,
+      List<String> files,
+      String element,
+      Map<String, String> attributes,
+      String text,
+      WithinYaml within,
+      String key,
+      String value,
+      String hint,
+      String source) {}
 
   record EntryYaml(
       String range,

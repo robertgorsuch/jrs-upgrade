@@ -139,6 +139,37 @@ class CustomizationReapplyTest {
     }
   }
 
+  /**
+   * Issue #6: a customized 8.2 ehcache.xml against a 10.x target says where the setting went, not
+   * only that the file is gone.
+   */
+  @Test
+  void should_say_where_the_setting_went_when_a_relocated_file_conflicts() throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
+      Path file = registerCustomized(f, f.webappDir.resolve("WEB-INF").resolve("ehcache.xml"));
+      java.nio.file.Files.delete(file);
+      Plan plan = f.ops().planUpgrade(UpgradeOptions.newdb("10.0.0", f.packageDir));
+
+      assertThat(plan.summary().warnings())
+          .anySatisfy(w -> assertThat(w).contains("WEB-INF/ehcache.xml").contains("appCacheType"));
+
+      StepResult result =
+          UpgradeFixture.step(plan, "plan-customization-reapply")
+              .execute(f.ctx("r-reloc"), f.events::add);
+
+      assertThat(result).isInstanceOf(StepResult.Ok.class);
+      assertThat(f.logs())
+          .anyMatch(m -> m.startsWith("CONFLICT ") && m.contains("absent after the upgrade"))
+          .anySatisfy(
+              m ->
+                  assertThat(m)
+                      .contains("WEB-INF/ehcache.xml removed in the target")
+                      .contains("appCacheType in default_master.properties")
+                      .contains("*-ehcache.xml")
+                      .contains("NGRA upgrade guide"));
+    }
+  }
+
   @Test
   void should_report_already_in_place_when_upgraded_file_equals_the_customized_copy()
       throws Exception {
