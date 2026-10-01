@@ -6,12 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.jaspersoft.jrsupgrade.core.engine.Plan;
 import com.jaspersoft.jrsupgrade.core.engine.RunOptions;
 import com.jaspersoft.jrsupgrade.core.engine.RunOutcome;
-import com.jaspersoft.jrsupgrade.core.state.HotfixInstalled;
-import com.jaspersoft.jrsupgrade.core.state.HotfixState;
 import com.jaspersoft.jrsupgrade.ops.upgrade.UpgradeOperations.UpgradeOptions;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -130,35 +127,6 @@ class PatchedWarTest {
                       .contains("jasperserver-api-externalAuth-impl-8.2.6.jar")
                       .contains("the running version is 8.2.0")
                       .doesNotContain("jasperserver-8.2.0.jar"));
-    }
-  }
-
-  @Test
-  void should_name_the_running_version_when_a_recorded_bundle_carries_a_hotfix_label()
-      throws Exception {
-    try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
-      f.store()
-          .recordHotfixInstalled(
-              new HotfixInstalled(
-                  "NGRA-CUMULATIVE-2",
-                  "8.2.6",
-                  "second cumulative bundle",
-                  "r-hf",
-                  Optional.empty(),
-                  HotfixState.INSTALLED,
-                  Instant.EPOCH),
-              List.of());
-
-      Plan plan =
-          f.ops().planUpgrade(UpgradeOptions.newdb(UpgradeFixture.NEW_VERSION, f.packageDir));
-
-      assertThat(plan.summary().warnings())
-          .anySatisfy(
-              w ->
-                  assertThat(w)
-                      .contains("NGRA-CUMULATIVE-2")
-                      .contains("labelled 8.2.6")
-                      .contains("the running version is 8.2.0"));
     }
   }
 

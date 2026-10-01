@@ -46,6 +46,9 @@ import org.slf4j.LoggerFactory;
  */
 public final class SmokeOperation {
 
+  /** The operation id a {@code smoke --mutating} run is journaled under. */
+  public static final String MUTATING_OPERATION = "smoke --mutating";
+
   public static final String DEFAULT_REPORT_URI = "/public/Samples/Reports/AllAccounts";
   public static final String EXPORT_ROOT = "/public";
   static final Duration EXPORT_TIMEOUT = Duration.ofSeconds(60);

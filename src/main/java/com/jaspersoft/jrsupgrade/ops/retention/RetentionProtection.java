@@ -3,8 +3,9 @@ package com.jaspersoft.jrsupgrade.ops.retention;
 import com.jaspersoft.jrsupgrade.core.engine.RunRecord;
 import com.jaspersoft.jrsupgrade.core.engine.TerminalState;
 import com.jaspersoft.jrsupgrade.core.state.Customization;
-import com.jaspersoft.jrsupgrade.core.state.HotfixInstalled;
 import com.jaspersoft.jrsupgrade.core.state.StateStore;
+import com.jaspersoft.jrsupgrade.ops.exim.DefaultExportImportOperations;
+import com.jaspersoft.jrsupgrade.ops.smoke.SmokeOperation;
 import com.jaspersoft.jrsupgrade.ops.upgrade.UpgradeOperations;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -14,13 +15,14 @@ import java.util.Set;
 
 /**
  * The runs whose snapshots retention pruning must never remove (spec §5.6, §10 step 15), computed
- * read-only from the state store: the run that installed every hotfix currently {@code INSTALLED},
- * the run that snapshotted every registered customization, the most recent {@code SUCCEEDED} {@code
- * upgrade} run (its {@code referenced_by = 'upgrade'} set; older upgrades become prunable), and
- * every run still pending recovery, whose snapshots {@code runs recover --rollback} needs.
- * Invariants: the result maps each protected run id to one human-readable reason; a reference whose
- * {@code snapshot_ref} is {@code runId/stepId} protects the whole run, because pruning works per
- * run; nothing here mutates.
+ * read-only from the state store: every run another tool journaled in this home (an operation that
+ * is not one of {@link #OWN_OPERATIONS}, such as jrsctl's hotfix runs in a home the two share,
+ * whose snapshots are that tool's rollback; ADR-0004), the run that snapshotted every registered
+ * customization, the most recent {@code SUCCEEDED} {@code upgrade} run (its {@code referenced_by =
+ * 'upgrade'} set; older upgrades become prunable), and every run still pending recovery, whose
+ * snapshots {@code runs recover --rollback} needs. Invariants: the result maps each protected run
+ * id to one human-readable reason; a reference whose {@code snapshot_ref} is {@code runId/stepId}
+ * protects the whole run, because pruning works per run; nothing here mutates.
  */
 public final class RetentionProtection {
 
@@ -35,18 +37,27 @@ public final class RetentionProtection {
     }
   }
 
+  /** The operations jrs-upgrade itself journals; any other run belongs to another tool. */
+  public static final Set<String> OWN_OPERATIONS =
+      Set.of(
+          DefaultExportImportOperations.EXPORT_OPERATION,
+          DefaultExportImportOperations.IMPORT_OPERATION,
+          UpgradeOperations.UPGRADE_OPERATION,
+          UpgradeOperations.ROLLBACK_OPERATION,
+          UpgradeOperations.TEST_OPERATION,
+          SmokeOperation.MUTATING_OPERATION);
+
   private RetentionProtection() {}
 
   public static Protected compute(StateStore store) {
     Objects.requireNonNull(store, "store");
     Map<String, String> reasons = new LinkedHashMap<>();
-    for (HotfixInstalled hotfix : store.installedHotfixes()) {
-      String reason = "installed hotfix " + hotfix.id();
-      reasons.putIfAbsent(hotfix.installedRunId(), reason);
-      hotfix
-          .snapshotRef()
-          .flatMap(RetentionProtection::runIdOf)
-          .ifPresent(r -> reasons.putIfAbsent(r, reason));
+    for (RunRecord run : store.runs(Integer.MAX_VALUE)) {
+      if (!OWN_OPERATIONS.contains(run.operation())) {
+        reasons.putIfAbsent(
+            run.runId(),
+            "a " + run.operation() + " run of another tool; not jrs-upgrade's to prune");
+      }
     }
     for (Customization customization : store.customizations()) {
       customization

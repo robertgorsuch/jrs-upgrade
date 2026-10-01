@@ -6,8 +6,6 @@ import com.jaspersoft.jrsupgrade.core.engine.RunLock;
 import com.jaspersoft.jrsupgrade.core.engine.TerminalState;
 import com.jaspersoft.jrsupgrade.core.snapshot.Snapshot;
 import com.jaspersoft.jrsupgrade.core.snapshot.SnapshotStore;
-import com.jaspersoft.jrsupgrade.core.state.HotfixInstalled;
-import com.jaspersoft.jrsupgrade.core.state.HotfixState;
 import com.jaspersoft.jrsupgrade.core.state.SnapshotRecord;
 import com.jaspersoft.jrsupgrade.core.state.StateStore;
 import com.jaspersoft.jrsupgrade.ops.FakeServices;
@@ -135,12 +133,10 @@ class RetentionPrunerTest {
   @Test
   void should_keep_referenced_snapshots_when_pruning_by_count() throws Exception {
     services(0, 1);
-    Snapshot hotfixed = snapshot("r-hf", "snapshot", Duration.ofDays(5), Optional.of("HF-1"));
+    // ADR-0004: a run another tool journaled in this home (jrsctl's hotfix apply)
+    Snapshot hotfixed = snapshot("r-hf", "snapshot", Duration.ofDays(5), Optional.empty());
     fake.stateStore()
-        .recordHotfixInstalled(
-            new HotfixInstalled(
-                "HF-1", "1", "t", "r-hf", Optional.of("r-hf/snapshot"), HotfixState.INSTALLED, now),
-            List.of());
+        .recordRunStart("r-hf", "hotfix.apply", Optional.empty(), now.minus(Duration.ofDays(5)));
     snapshot("r-b", "snapshot", Duration.ofDays(2), Optional.empty());
     snapshot("r-c", "snapshot", Duration.ofDays(1), Optional.empty());
 
@@ -292,8 +288,14 @@ class RetentionPrunerTest {
 
   /** A run started {@code age} ago, ended or not, with a bundle copy in its run directory. */
   private Path runDir(String runId, Duration age, boolean ended) throws IOException {
+    return runDir(runId, age, ended, "import");
+  }
+
+  /** As above, journaled under {@code operation}. */
+  private Path runDir(String runId, Duration age, boolean ended, String operation)
+      throws IOException {
     Instant started = now.minus(age);
-    fake.stateStore().recordRunStart(runId, "hotfix-apply", Optional.empty(), started);
+    fake.stateStore().recordRunStart(runId, operation, Optional.empty(), started);
     if (ended) {
       fake.stateStore().recordRunEnd(runId, started.plusSeconds(60), TerminalState.SUCCEEDED, 0);
     }
@@ -345,21 +347,11 @@ class RetentionPrunerTest {
   }
 
   @Test
-  void should_keep_the_bundle_copy_of_an_installed_hotfix_when_its_run_is_expired()
+  void should_keep_the_run_directory_of_a_run_another_tool_journaled_when_it_is_expired()
       throws Exception {
     services(30, 20);
-    Path dir = runDir("r-hf", Duration.ofDays(40), true);
-    fake.stateStore()
-        .recordHotfixInstalled(
-            new HotfixInstalled(
-                "HF-1",
-                "1",
-                "t",
-                "r-hf",
-                Optional.empty(),
-                HotfixState.INSTALLED,
-                now.minus(Duration.ofDays(40))),
-            List.of());
+    // ADR-0004: jrsctl's hotfix apply in a shared home keeps its bundle copy, ledger or not
+    Path dir = runDir("r-hf", Duration.ofDays(40), true, "hotfix.apply");
 
     RetentionPruner.Result result = pruner().prune(false);
 

@@ -6,14 +6,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.jaspersoft.jrsupgrade.core.JrsUpgradeHome;
 import com.jaspersoft.jrsupgrade.core.json.Json;
 import com.jaspersoft.jrsupgrade.core.platform.HomeRedirect;
-import com.jaspersoft.jrsupgrade.core.state.HotfixInstalled;
-import com.jaspersoft.jrsupgrade.core.state.HotfixState;
+import com.jaspersoft.jrsupgrade.core.state.Customization;
 import com.jaspersoft.jrsupgrade.core.state.StateStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -44,13 +42,13 @@ class HomeCommandTest {
   }
 
   @Test
-  void should_refuse_to_move_when_the_home_still_holds_an_installed_hotfix() throws Exception {
+  void should_refuse_to_move_when_the_home_still_holds_a_registered_customization()
+      throws Exception {
     Path small = Files.createDirectories(tmp.resolve("small"));
     try (StateStore store = StateStore.open(new JrsUpgradeHome(small), Clock.systemUTC())) {
-      store.recordHotfixInstalled(
-          new HotfixInstalled(
-              "HF-1", "1", "t", "r-1", Optional.empty(), HotfixState.INSTALLED, Instant.now()),
-          List.of());
+      store.registerCustomization(
+          new Customization(
+              tmp.resolve("custom.properties"), "aa", Optional.empty(), Instant.now()));
     }
 
     InitCommandTest.Run refused =
@@ -61,7 +59,7 @@ class HomeCommandTest {
             "home", "set", tmp.resolve("big").toString(), "--force", "--home", small.toString());
 
     assertThat(refused.code()).isEqualTo(ExitCodes.PRECHECK_FAILED);
-    assertThat(refused.err()).contains("1 installed hotfix").contains("--force");
+    assertThat(refused.err()).contains("1 registered customization").contains("--force");
     assertThat(forced.code()).as(forced.err()).isZero();
     assertThat(HomeRedirect.target(small)).isPresent();
   }

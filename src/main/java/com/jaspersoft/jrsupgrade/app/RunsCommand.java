@@ -415,10 +415,10 @@ final class RunsCommand implements Runnable {
 
   /**
    * {@code jrs-upgrade runs prune [--dry-run] [--json]} (spec §5.6): retention pruning per {@code
-   * backups.retentionDays} and {@code backups.maxSnapshots}; snapshots of an installed hotfix, a
-   * registered customization, the most recent successful upgrade or a pending run are never
-   * removed. JSON shape: {@code {"dryRun":bool,"removed":[{"id","runId","stepId","path"}],"kept":n,
-   * "protected":n}}.
+   * backups.retentionDays} and {@code backups.maxSnapshots}; snapshots of a run another tool
+   * journaled in this home (ADR-0004), a registered customization, the most recent successful
+   * upgrade or a pending run are never removed. JSON shape: {@code
+   * {"dryRun":bool,"removed":[{"id","runId","stepId","path"}],"kept":n, "protected":n}}.
    */
   @Command(
       name = "prune",

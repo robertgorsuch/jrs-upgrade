@@ -7,9 +7,9 @@ the tests enforce (a command without a schema fails `JsonOutputSchemaTest`).
 
 Two layouts exist:
 
-- **Document** — exactly one JSON document, e.g. `doctor`, `hotfix list`, `keys add`.
+- **Document** — exactly one JSON document, e.g. `doctor`, `customizations list`, `runs show`.
   `config show` validates against `core`'s `schema/config.schema.json`.
-- **Stream** (every command that runs a `Plan`: `hotfix apply|rollback`, `export`, `import`,
+- **Stream** (every command that runs a `Plan`: `export`, `import`,
   `upgrade`, `upgrade rollback`, `runs recover`) — JSON Lines, one document per line:
   1. the plan (`plan.schema.json`; `runs recover` rebuilds it and does not print it; with `--plan`
      it is the only line),

@@ -1,7 +1,5 @@
 package com.jaspersoft.jrsupgrade.ops.upgrade;
 
-import com.jaspersoft.jrsupgrade.core.state.HotfixInstalled;
-import com.jaspersoft.jrsupgrade.core.state.HotfixState;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -21,11 +19,12 @@ import org.semver4j.Semver;
 /**
  * Issue #9: hotfix bundles and their jars are sometimes labelled with a version the product never
  * reached (NGRA ran 8.2.0 with jars and a cumulative bundle labelled 8.2.6), and nobody can then
- * say what is running. This compares the labels with the version {@code serverInfo} reports and
- * says which one is the running version. Invariants: read-only; a label is reported only when it
- * differs from the server's version; the server's version is always named as the running one,
- * because it is the one the vendor scripts and the compatibility matrix judge; an unreadable {@code
- * WEB-INF/lib} yields no lines rather than a failure.
+ * say what is running. This compares the labels the vendor jars under {@code WEB-INF/lib} carry
+ * with the version {@code serverInfo} reports and says which one is the running version; the
+ * installed files are the only source, there is no hotfix ledger (ADR-0004). Invariants: read-only;
+ * a label is reported only when it differs from the server's version; the server's version is
+ * always named as the running one, because it is the one the vendor scripts and the compatibility
+ * matrix judge; an unreadable {@code WEB-INF/lib} yields no lines rather than a failure.
  */
 final class HotfixLabels {
 
@@ -56,11 +55,9 @@ final class HotfixLabels {
   }
 
   /**
-   * One line per label that differs from {@code serverVersion}: jar names in {@code webappDir}'s
-   * {@code WEB-INF/lib}, then the recorded hotfixes still installed.
+   * One line per label in {@code webappDir}'s {@code WEB-INF/lib} that differs from the server's.
    */
-  static List<String> mismatches(
-      Path webappDir, String serverVersion, List<HotfixInstalled> recorded) {
+  static List<String> mismatches(Path webappDir, String serverVersion) {
     List<String> out = new ArrayList<>();
     Map<String, TreeSet<String>> jarsByLabel = new TreeMap<>(VERSION_ORDER);
     Path lib = webappDir.resolve("WEB-INF").resolve("lib");
@@ -94,21 +91,6 @@ final class HotfixLabels {
               + serverVersion
               + ": "
               + running(serverVersion, e.getKey()));
-    }
-    for (HotfixInstalled h : recorded) {
-      if (h.state() == HotfixState.INSTALLED && !same(h.version(), serverVersion)) {
-        out.add(
-            "hotfix "
-                + h.id()
-                + " ("
-                + h.title()
-                + ") is labelled "
-                + h.version()
-                + " while the server reports "
-                + serverVersion
-                + ": "
-                + running(serverVersion, h.version()));
-      }
     }
     return out;
   }
