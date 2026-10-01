@@ -318,7 +318,9 @@ public record Config(
     }
   }
 
-  /** The {@code database:} block; only needed for hotfixes that carry SQL. */
+  /**
+   * The {@code database:} block; needed by the upgrade steps that reach the repository database.
+   */
   public record Database(
       Optional<DatabaseType> type,
       Optional<String> url,

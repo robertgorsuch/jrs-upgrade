@@ -1,6 +1,6 @@
 # jrs-upgrade recovery runbook
 
-> Inherited from jrsctl at the extraction (2026-10-01) with names replaced; sections about hotfixes, export, import and keys describe commands this tool no longer has. Rewrite tracked as an issue.
+> jrs-upgrade was split out of jrsctl v2.3.0 (ADR-0001). ADR-0001 to ADR-0004 are this repository's own decisions (`docs/decisions/`); higher ADR numbers are jrsctl's, kept for their reasoning.
 
 What to do when a jrs-upgrade run did not end the way it should have. Every situation below is
 identified by the exit code and the message the command printed; the commands named here are
@@ -138,15 +138,41 @@ decrypted here. Copy the source server's `.jrsks` and `.jrsksp` to this host and
 vendor tools with the service stopped, whatever `--strategy` says, and restores the current
 keystore from its backup on rollback.
 
-## A hotfix that should not have been applied
+## "... is not one documented upgrade; the documented route is ..." (exit 2)
 
-`jrs-upgrade hotfix rollback <id>` at any later time restores every file from the snapshot the apply
-run took and runs the bundle's rollback SQL in reverse. A hotfix declared `"rollback":
-"irreversible"` has no SQL rollback; its files are still restored and the plan says which database
-changes remain. jrs-upgrade never prunes the snapshots of a run another tool journaled in the home (ADR-0004).
+No single path of the compatibility matrix covers the running version and `--to`, and the route
+the matrix documents stops at a version you gave no package for (ADR-0002). Nothing was changed.
+Unpack the vendor distribution of each stop the message names and pass one `--package` per hop,
+for example `--package <10.0.0 dir> --package <10.1.0 dir>` for 8.2.0 to 10.1.0. A package that
+states no hop's version is refused with exit 1; a pair no route reaches with exit 6.
+
+## "the transit hop to ... deployed its webapp into ..." (exit 3)
+
+A route's intermediate hop is told `appServerType=skipAppServerCheck` and a scratch
+`appServerDir`, so buildomatic should deploy nothing; this message means the live webapp states the
+transit version afterwards (ADR-0002). The run was rolled back to point B: the webapp,
+buildomatic, configuration and keystore are as they were. The repository database is not: the
+transit hop's vendor script has run against it. Restore it with
+`jrs-upgrade upgrade rollback <runId> --to-point B --restore-database` when the first hop was newdb,
+or from your own backup when it was samedb, then run the hops as separate upgrades and report the
+package's buildomatic version.
+
+## "custom DDL failed: ..." (exit 3)
+
+One of the `--custom-ddl` scripts failed against the database the newdb hop rebuilt (issue #3).
+The vendor phase was rolled back to point B, but `js-upgrade-newdb` had already dropped and
+recreated the repository database. Fix the script (the structure of the customer tables as they
+were is in `snapshots/<runId>/foreign-objects.sql`), rebuild the old database with
+`jrs-upgrade upgrade rollback <runId> --to-point B --restore-database`, then run the upgrade again.
+
+## Hotfixes
+
+jrs-upgrade neither applies nor rolls back hotfixes; that is jrs-hotfix's job. In a home shared
+with jrsctl, jrs-upgrade never prunes the snapshots or run directories of jrsctl's runs, its hotfix
+runs among them, so their rollback stays possible with jrsctl (ADR-0004).
 
 ## Getting the facts to whoever helps you
 
 `jrs-upgrade runs support-bundle <id>`, or by hand: `jrs-upgrade runs show <id> --json`,
 `jrs-upgrade doctor --json`, and `logs/jrs-upgrade.log` from the jrs-upgrade home. All three are already
-redacted; none contains a secret, the key ring, the keystore or an archive.
+redacted; none contains a secret, the keystore or an archive.

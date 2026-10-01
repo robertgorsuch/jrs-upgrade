@@ -11,6 +11,22 @@
 > written, `RecordUpgrade` marks no hotfix, and retention protects every run another tool
 > journaled instead of the runs of installed hotfixes. A slimmed specification replaces this file
 > when the baseline has been reshaped (see the issues in the repository).
+>
+> ADR-0001 to ADR-0004 are jrs-upgrade's own decisions (`docs/decisions/`); every higher ADR number
+> below is jrsctl's. Behaviour added since the extraction, which the sections below do not describe
+> (the operator guide does):
+>
+> - multi-hop routes through the matrix's `releases`, with transit hops that deploy nothing
+>   (ADR-0002, issue #1); `--package` is repeatable;
+> - `--war` (a patched WAR in place of the package's own) and hotfix-label reporting from the
+>   installed jars (issue #9);
+> - the customer-table guard of a newdb hop: `dump-foreign-schema` and `--custom-ddl` (issue #3);
+> - `check-analytics-jndi` on 10.x when `context.xml` is customized (issue #11);
+> - the customization findings against a target package, from the matrix's `jarRules`,
+>   `relocations` and `constructs` (matrix version 3, ADR-0003, issues #4, #5, #6, #8), shown by
+>   `customizations scan --target` and in the upgrade plan;
+> - `check-adhoc-templates` and `--restore-vendor-templates` after a newdb hop from before 9.0
+>   (issue #10).
 
 ## 2. Definitions
 
@@ -117,7 +133,7 @@ service:
   stopTimeoutSeconds: 180
   # forceStopAfterSeconds: 60           # ctlscript / catalina only, off when absent, below stopTimeoutSeconds:
                                         # ends this Tomcat's JVM if it outlives the stop script (ADR-0016)
-database:                               # required only for hotfixes that carry SQL
+database:                               # needed by the upgrade steps that reach the repository database (cache clear, #3)
   type: postgresql                      # postgresql | mysql | oracle | mssql | db2
   url: jdbc:postgresql://localhost:5432/jasperserver
   username: jasperdb
@@ -519,7 +535,7 @@ Non-mutating by default: login; serverInfo; list `/` repository; run `smoke.repo
 
 ### 12.3 `selfcheck`
 
-Verifies every jar in the runtime image against a build-time manifest of hashes, runtime version, config schema, key ring, SQLite schema version, the host operating system and architecture against ADR-0002, and the directory the SQLite native library is unpacked into (a `noexec` mount fails the item). A failing platform item exits 6, not 2.
+Verifies every jar in the runtime image against a build-time manifest of hashes, runtime version, config schema, key ring, SQLite schema version, the host operating system and architecture against jrsctl ADR-0002, and the directory the SQLite native library is unpacked into (a `noexec` mount fails the item). A failing platform item exits 6, not 2.
 
 ### 12.4 `runs support-bundle`
 
@@ -558,7 +574,7 @@ Verifies every jar in the runtime image against a build-time manifest of hashes,
 | 3 | run failed, rolled back cleanly |
 | 4 | run failed, rollback incomplete — manual action required (details printed) |
 | 5 | cancelled |
-| 6 | unsupported server/config (compat matrix), or a host outside ADR-0002 (not Windows or Linux on x86-64) |
+| 6 | unsupported server/config (compat matrix), or a host outside jrsctl ADR-0002 (not Windows or Linux on x86-64) |
 | 7 | signature/verification failure |
 | 8 | pending recovery required — run `jrs-upgrade runs recover <runId>` |
 | 9 | run lock held by another jrs-upgrade process |

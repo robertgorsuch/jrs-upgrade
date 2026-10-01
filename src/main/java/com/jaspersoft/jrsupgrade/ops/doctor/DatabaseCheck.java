@@ -57,9 +57,9 @@ final class DatabaseCheck {
     if (db.type().isEmpty()) {
       return ReportItem.skip(
           NAME,
-          "not configured; needed only for hotfixes with SQL",
+          "not configured; needed for the upgrade's repository-cache clear, the customer-table guard of a newdb upgrade and --custom-ddl",
           "set database.type, database.url, database.username and database.passwordRef before"
-              + " applying a hotfix that carries SQL");
+              + " an upgrade that needs them");
     }
     if (db.passwordRef().isEmpty()) {
       // #73: settings read from default_master.properties are not a request to check the database
@@ -67,7 +67,7 @@ final class DatabaseCheck {
           NAME,
           db.type().get().yamlValue()
               + " repository database found, but database.passwordRef is not set, so the"
-              + " connection is not checked; needed only for hotfixes with SQL",
+              + " connection is not checked; needed for the upgrade's repository-cache clear, the customer-table guard of a newdb upgrade and --custom-ddl",
           "set database.passwordRef (jrs-upgrade config set database.passwordRef) to check the"
               + " connection");
     }
@@ -78,7 +78,7 @@ final class DatabaseCheck {
           NAME,
           "database password not available ("
               + db.passwordRef().get().render()
-              + "), so the connection is not checked; needed only for hotfixes with SQL",
+              + "), so the connection is not checked; needed for the upgrade's repository-cache clear, the customer-table guard of a newdb upgrade and --custom-ddl",
           "set the variable, create the file, or unlock secrets.enc with --passphrase-file or"
               + " JRS_UPGRADE_PASSPHRASE, then run doctor again");
     }
