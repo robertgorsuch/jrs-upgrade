@@ -497,6 +497,24 @@ final class CustomizationsCommand implements Runnable {
       for (CustomizationOperations.RelocationFinding r : f.relocations()) {
         out.println(redactor.redact("  " + r.path() + ": " + r.description()));
       }
+      out.println("constructs the target handles differently (issue #8):");
+      if (f.constructs().isEmpty()) {
+        out.println("  none");
+      }
+      for (CustomizationOperations.ConstructFinding c : f.constructs()) {
+        out.println(
+            redactor.redact(
+                "  "
+                    + c.path()
+                    + (c.line() > 0 ? ":" + c.line() : "")
+                    + " "
+                    + c.construct()
+                    + ": "
+                    + c.hint()
+                    + " ("
+                    + c.source()
+                    + ")"));
+      }
       out.println("three-way merges of the changed files (issue #6):");
       if (f.merges().isEmpty()) {
         out.println("  none");
@@ -578,6 +596,18 @@ final class CustomizationsCommand implements Runnable {
         merges.add(row);
       }
       tree.put("merges", merges);
+      List<Map<String, Object>> constructs = new ArrayList<>();
+      for (CustomizationOperations.ConstructFinding c : f.constructs()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("path", c.path());
+        row.put("rule", c.rule());
+        row.put("line", c.line());
+        row.put("construct", c.construct());
+        row.put("hint", c.hint());
+        row.put("source", c.source());
+        constructs.add(row);
+      }
+      tree.put("constructs", constructs);
       return tree;
     }
 

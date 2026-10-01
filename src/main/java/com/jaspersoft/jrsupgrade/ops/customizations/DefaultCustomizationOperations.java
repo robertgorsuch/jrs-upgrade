@@ -172,6 +172,7 @@ public final class DefaultCustomizationOperations implements CustomizationOperat
       }
       VendorClassCheck.Result classes = VendorClassCheck.check(code, index, to);
       List<RelocationFinding> relocations = new ArrayList<>();
+      List<ConstructFinding> constructs = new ArrayList<>();
       java.util.Set<String> mergeable = new java.util.TreeSet<>();
       for (ScanEntry e : scan.entries()) {
         String rel = e.relativePath();
@@ -180,6 +181,12 @@ public final class DefaultCustomizationOperations implements CustomizationOperat
             || PackageIndex.isLibJar(rel)
             || rel.endsWith(".class")) {
           continue;
+        }
+        List<UpgradeRules.ConstructRule> applicable =
+            rules.constructs(source, to).stream().filter(r -> r.appliesTo(rel)).toList();
+        if (!applicable.isEmpty()) {
+          constructs.addAll(
+              ConstructCheck.check(rel, Files.readAllBytes(e.installed().get()), applicable));
         }
         for (UpgradeRules.Relocation r : rules.relocations(source, to)) {
           if (r.matches(rel)) {
@@ -215,7 +222,8 @@ public final class DefaultCustomizationOperations implements CustomizationOperat
           classes.classes(),
           classes.jakarta(),
           relocations,
-          merges);
+          merges,
+          constructs);
     } catch (IOException e) {
       throw new CustomizationException(
           "cannot read the target " + targetWebapp + ": " + e.getMessage(),

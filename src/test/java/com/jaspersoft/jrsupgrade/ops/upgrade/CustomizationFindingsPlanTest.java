@@ -77,6 +77,29 @@ class CustomizationFindingsPlanTest {
     }
   }
 
+  /** Issue #8: a registered override with annotatedClasses on the vendor sessionFactory. */
+  @Test
+  void should_name_constructs_the_target_handles_differently() throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
+      Path xml = f.webappDir.resolve("WEB-INF/ngra-applicationContext.xml");
+      UpgradeFixture.write(
+          xml,
+          "<beans><bean id=\"sessionFactory\">"
+              + "<property name=\"annotatedClasses\"/></bean></beans>");
+      register(f, xml);
+
+      Plan plan = f.ops().planUpgrade(UpgradeOptions.newdb("10.0.0", f.packageDir));
+
+      assertThat(plan.summary().warnings())
+          .anySatisfy(
+              w ->
+                  assertThat(w)
+                      .contains("WEB-INF/ngra-applicationContext.xml:1")
+                      .contains("persistence.xml")
+                      .contains("issue #8"));
+    }
+  }
+
   @Test
   void should_say_nothing_about_jars_when_none_is_registered() throws Exception {
     try (UpgradeFixture f = UpgradeFixture.create(tmp)) {

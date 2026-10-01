@@ -43,6 +43,28 @@ public final class CustomizationFindings {
           out.add("customization " + rel + ": " + r.describe() + " (issue #6)");
         }
       }
+      List<UpgradeRules.ConstructRule> applicable =
+          rules.constructs(source, target).stream().filter(r -> r.appliesTo(rel)).toList();
+      if (!applicable.isEmpty() && Files.isRegularFile(file)) {
+        try {
+          for (CustomizationOperations.ConstructFinding f :
+              ConstructCheck.check(rel, Files.readAllBytes(file), applicable)) {
+            out.add(
+                "customization "
+                    + rel
+                    + (f.line() > 0 ? ":" + f.line() : "")
+                    + ": "
+                    + f.construct()
+                    + ": "
+                    + f.hint()
+                    + " ("
+                    + f.source()
+                    + "; issue #8)");
+          }
+        } catch (IOException e) {
+          out.add("customization " + rel + " cannot be read: " + e.getMessage());
+        }
+      }
     }
     List<Path> jars = new ArrayList<>();
     for (Customization c : registered) {

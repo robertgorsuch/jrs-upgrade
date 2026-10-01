@@ -39,7 +39,7 @@
       "type": "object",
       "description": "Present with --target: what becomes of the changed and added files on the target version (ADR-0003).",
       "additionalProperties": false,
-      "required": ["targetWebapp", "sourceVersion", "targetVersion", "jars", "classes", "jakarta", "relocations", "merges"],
+      "required": ["targetWebapp", "sourceVersion", "targetVersion", "jars", "classes", "jakarta", "relocations", "merges", "constructs"],
       "properties": {
         "targetWebapp": { "type": "string" },
         "sourceVersion": { "type": "string" },
@@ -116,6 +116,23 @@
               "status": { "enum": ["CLEAN", "CONFLICT", "BINARY", "NOT_IN_TARGET"] },
               "conflicts": { "type": "integer" },
               "merged": { "type": "string", "description": "The merged file, with --merge-dir." }
+            }
+          }
+        },
+        "constructs": {
+          "type": "array",
+          "description": "Issue #8: constructs inside changed and added override files that the target handles differently, from the matrix's construct rules.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "rule", "line", "construct", "hint", "source"],
+            "properties": {
+              "path": { "type": "string" },
+              "rule": { "type": "string" },
+              "line": { "type": "integer", "description": "1-based; 0 when unknown." },
+              "construct": { "type": "string" },
+              "hint": { "type": "string", "description": "The target's form." },
+              "source": { "type": "string" }
             }
           }
         }

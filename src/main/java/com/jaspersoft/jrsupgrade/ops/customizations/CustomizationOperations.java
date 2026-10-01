@@ -212,6 +212,21 @@ public interface CustomizationOperations {
     }
   }
 
+  /**
+   * A construct inside a changed or added file that the target handles differently (issue #8): the
+   * file, the line (0 when unknown), the construct as found, and the target's form.
+   */
+  record ConstructFinding(
+      String path, String rule, int line, String construct, String hint, String source) {
+    public ConstructFinding {
+      Objects.requireNonNull(path, "path");
+      Objects.requireNonNull(rule, "rule");
+      Objects.requireNonNull(construct, "construct");
+      Objects.requireNonNull(hint, "hint");
+      Objects.requireNonNull(source, "source");
+    }
+  }
+
   /** How the three-way merge of a customized file came out (issue #6). */
   enum MergeStatus {
     /** Both sides' changes applied without overlap. */
@@ -245,7 +260,8 @@ public interface CustomizationOperations {
       List<ClassFinding> classes,
       List<JakartaFinding> jakarta,
       List<RelocationFinding> relocations,
-      List<MergeFinding> merges) {
+      List<MergeFinding> merges,
+      List<ConstructFinding> constructs) {
     public Findings {
       Objects.requireNonNull(targetWebapp, "targetWebapp");
       Objects.requireNonNull(sourceVersion, "sourceVersion");
@@ -255,6 +271,7 @@ public interface CustomizationOperations {
       jakarta = List.copyOf(jakarta);
       relocations = List.copyOf(relocations);
       merges = List.copyOf(merges);
+      constructs = List.copyOf(constructs);
     }
   }
 
