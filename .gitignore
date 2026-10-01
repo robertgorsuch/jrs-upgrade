@@ -1,0 +1,9 @@
+target/
+*.class
+*.log
+.idea/
+*.iml
+.vscode/
+.DS_Store
+hs_err_pid*
+.flattened-pom.xml

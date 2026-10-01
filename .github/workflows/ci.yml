@@ -1,0 +1,38 @@
+name: ci
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Format gate (fails in seconds, before the build)
+        shell: bash
+        run: ./mvnw -B -q spotless:check
+      - name: Build, unit tests, acceptance against the shaded jar, coverage floor
+        shell: bash
+        run: ./mvnw -B verify
+      - name: Keep the test reports of a failed build
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports-${{ matrix.os }}
+          if-no-files-found: ignore
+          path: |
+            target/surefire-reports
+            target/failsafe-reports
