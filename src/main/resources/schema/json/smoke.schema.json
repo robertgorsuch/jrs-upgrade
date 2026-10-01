@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/smoke.schema.json",
+  "title": "jrs-upgrade smoke --json (spec §12.2)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items", "counts", "exitCode", "runId"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": { "$ref": "https://jaspersoft.com/jrs-upgrade/report-item.schema.json#/$defs/item" }
+    },
+    "counts": { "$ref": "https://jaspersoft.com/jrs-upgrade/report-item.schema.json#/$defs/counts" },
+    "exitCode": { "type": "integer", "enum": [0, 2] },
+    "runId": {
+      "type": ["string", "null"],
+      "description": "The journaled run of the --mutating smoke plan; null when nothing was mutated."
+    }
+  }
+}

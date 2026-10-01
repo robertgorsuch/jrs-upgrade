@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/customizations-unregister.schema.json",
+  "title": "jrs-upgrade customizations unregister --json (spec §10.3)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["path", "unregistered"],
+  "properties": {
+    "path": { "type": "string" },
+    "unregistered": { "const": true }
+  }
+}

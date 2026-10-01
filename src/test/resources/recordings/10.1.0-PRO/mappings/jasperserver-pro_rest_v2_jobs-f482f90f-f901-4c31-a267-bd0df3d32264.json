@@ -1,0 +1,22 @@
+{
+  "id" : "f482f90f-f901-4c31-a267-bd0df3d32264",
+  "name" : "jasperserver-pro_rest_v2_jobs",
+  "request" : {
+    "url" : "/jasperserver-pro/rest_v2/jobs",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 204,
+    "headers" : {
+      "Keep-Alive" : "timeout=20",
+      "Cache-Control" : "private",
+      "Vary" : [ "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers" ],
+      "X-XSS-Protection" : "1; mode=block",
+      "P3P" : "CP=\"ALL\"",
+      "Date" : "Fri, 11 Sep 2026 14:33:32 GMT"
+    }
+  },
+  "uuid" : "f482f90f-f901-4c31-a267-bd0df3d32264",
+  "persistent" : true,
+  "insertionIndex" : 1
+}

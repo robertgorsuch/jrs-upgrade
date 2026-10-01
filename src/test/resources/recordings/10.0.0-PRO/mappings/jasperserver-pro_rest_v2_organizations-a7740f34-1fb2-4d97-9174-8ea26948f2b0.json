@@ -1,0 +1,25 @@
+{
+  "id" : "a7740f34-1fb2-4d97-9174-8ea26948f2b0",
+  "name" : "jasperserver-pro_rest_v2_organizations",
+  "request" : {
+    "url" : "/jasperserver-pro/rest_v2/organizations?limit=1",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 204,
+    "headers" : {
+      "Keep-Alive" : "timeout=20",
+      "Total-Count" : "0",
+      "Start-Index" : "0",
+      "Cache-Control" : "private",
+      "Result-Count" : "0",
+      "Vary" : [ "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers" ],
+      "X-XSS-Protection" : "1; mode=block",
+      "P3P" : "CP=\"ALL\"",
+      "Date" : "Fri, 11 Sep 2026 14:33:32 GMT"
+    }
+  },
+  "uuid" : "a7740f34-1fb2-4d97-9174-8ea26948f2b0",
+  "persistent" : true,
+  "insertionIndex" : 5
+}

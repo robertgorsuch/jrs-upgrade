@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/runs-prune.schema.json",
+  "title": "jrs-upgrade runs prune --json (spec §14 Phase 8 retention pruning incl. upgrade protection)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["dryRun", "removed", "kept", "protected"],
+  "properties": {
+    "dryRun": { "type": "boolean" },
+    "removed": { "type": "array", "description": "Runs (and their snapshots) that were, or would be, pruned." },
+    "kept": { "type": ["integer", "array"], "description": "Runs retained by the retention policy." },
+    "protected": { "type": ["integer", "array"], "description": "Runs kept because an upgrade still depends on them." }
+  }
+}

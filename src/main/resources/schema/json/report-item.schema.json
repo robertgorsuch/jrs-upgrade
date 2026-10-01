@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/report-item.schema.json",
+  "title": "One doctor/smoke report item and the summary counts (ops.ReportItem, ops.Report.Counts)",
+  "$defs": {
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "detail", "remediation"],
+      "properties": {
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["PASS", "WARN", "FAIL", "SKIP"] },
+        "detail": { "type": "string" },
+        "remediation": { "type": "string" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pass", "warn", "fail", "skip"],
+      "properties": {
+        "pass": { "type": "integer", "minimum": 0 },
+        "warn": { "type": "integer", "minimum": 0 },
+        "fail": { "type": "integer", "minimum": 0 },
+        "skip": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

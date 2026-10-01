@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/customization.schema.json",
+  "title": "jrs-upgrade customizations register --json: one registered customization (spec §10.3)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["path", "originalSha256", "snapshotRef", "registeredAt"],
+  "properties": {
+    "path": { "type": "string" },
+    "originalSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "snapshotRef": { "type": "string" },
+    "registeredAt": { "type": "string", "format": "date-time" }
+  }
+}

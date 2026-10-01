@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/config.schema.json",
+  "title": "jrs-upgrade configuration (spec §5.1)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseUrl"],
+      "properties": {
+        "baseUrl": { "type": "string", "format": "uri" },
+        "webappName": { "type": "string", "enum": ["jasperserver", "jasperserver-pro"] },
+        "installDir": { "type": "string" },
+        "tomcatDir": { "type": "string" },
+        "buildomaticDir": { "type": "string" },
+        "runAsUser": { "type": "string" },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "type": "string", "enum": ["basic", "form", "token"], "default": "basic" },
+            "username": { "type": "string" },
+            "passwordRef": { "$ref": "#/$defs/secretRef" },
+            "tokenLocation": { "type": "string", "enum": ["query", "header"], "default": "query" }
+          }
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["windows-service", "systemd", "ctlscript", "catalina", "manual"] },
+        "name": { "type": "string" },
+        "scriptPath": { "type": "string" },
+        "stopTimeoutSeconds": { "type": "integer", "minimum": 1, "default": 180 },
+        "forceStopAfterSeconds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["postgresql", "mysql", "oracle", "mssql", "db2"] },
+        "url": { "type": "string" },
+        "username": { "type": "string" },
+        "passwordRef": { "$ref": "#/$defs/secretRef" },
+        "driverDir": { "type": ["string", "null"] }
+      }
+    },
+    "vendor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "javaHome": { "type": "string" }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "type": "string", "enum": ["isolated", "public"], "default": "isolated" },
+        "proxy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "host": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "username": { "type": "string" },
+            "passwordRef": { "$ref": "#/$defs/secretRef" },
+            "noProxy": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "trustStore": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": { "type": "string" },
+            "passwordRef": { "$ref": "#/$defs/secretRef" }
+          }
+        }
+      }
+    },
+    "backups": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "retentionDays": { "type": "integer", "minimum": 0, "default": 30 },
+        "maxSnapshots": { "type": "integer", "minimum": 1, "default": 20 }
+      }
+    },
+    "smoke": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reportUri": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "secretRef": {
+      "type": "string",
+      "pattern": "^(env:[A-Za-z_][A-Za-z0-9_]*|file:.+|enc:[A-Za-z0-9_.-]+)$",
+      "description": "env:NAME | file:/path | enc:NAME (spec §5.2)"
+    }
+  }
+}

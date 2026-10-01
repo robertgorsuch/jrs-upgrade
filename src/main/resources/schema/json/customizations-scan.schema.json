@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/customizations-scan.schema.json",
+  "title": "jrs-upgrade customizations scan --json (spec §10.3, #72)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["installedWebapp", "vendorWebapp", "entries", "registered"],
+  "properties": {
+    "installedWebapp": { "type": "string" },
+    "vendorWebapp": { "type": "string", "description": "The vendor directory or war compared against." },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "change", "registered"],
+        "properties": {
+          "path": { "type": "string", "description": "Relative to the webapp, with / separators." },
+          "change": { "enum": ["CHANGED", "ADDED", "INSTALLER", "REMOVED"] },
+          "registered": { "type": "boolean" }
+        }
+      }
+    },
+    "tomcat": {
+      "type": "array",
+      "description": "Present with --tomcat: the Tomcat-side files to carry over (issue #117).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "kind", "registered"],
+        "properties": {
+          "path": { "type": "string", "description": "Relative to server.tomcatDir, with / separators." },
+          "kind": { "enum": ["SETENV", "SERVER_XML", "CONTEXT_FRAGMENT", "LIBRARY"] },
+          "registered": { "type": "boolean" }
+        }
+      }
+    },
+    "registered": {
+      "type": "array",
+      "description": "Customizations registered by this run (--register).",
+      "items": { "$ref": "https://jaspersoft.com/jrs-upgrade/customization.schema.json" }
+    }
+  }
+}

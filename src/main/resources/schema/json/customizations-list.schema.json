@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/customizations-list.schema.json",
+  "title": "jrs-upgrade customizations list --json (spec §10.3)",
+  "type": "array",
+  "items": { "$ref": "https://jaspersoft.com/jrs-upgrade/customization.schema.json" }
+}

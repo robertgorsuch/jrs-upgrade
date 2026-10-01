@@ -1,0 +1,27 @@
+{
+  "id" : "62704b24-84cb-4868-9b3f-8fe8b28e9865",
+  "name" : "jasperserver-pro_rest_v2_resources",
+  "request" : {
+    "url" : "/jasperserver-pro/rest_v2/resources?folderUri=%2F&recursive=false&limit=1",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 200,
+    "body" : "{\"resourceLookup\":[{\"version\":0,\"permissionMask\":1,\"creationDate\":\"2026-05-28T13:21:12\",\"updateDate\":\"2026-01-22T00:27:10\",\"label\":\"Ad Hoc Components\",\"description\":\"Ad Hoc Components\",\"uri\":\"/adhoc\",\"resourceType\":\"folder\"}]}",
+    "headers" : {
+      "Keep-Alive" : "timeout=20",
+      "Total-Count" : "0",
+      "Start-Index" : "0",
+      "Cache-Control" : "private",
+      "Result-Count" : "1",
+      "Vary" : [ "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers" ],
+      "X-XSS-Protection" : "1; mode=block",
+      "P3P" : "CP=\"ALL\"",
+      "Date" : "Fri, 11 Sep 2026 14:33:32 GMT",
+      "Content-Type" : "application/json"
+    }
+  },
+  "uuid" : "62704b24-84cb-4868-9b3f-8fe8b28e9865",
+  "persistent" : true,
+  "insertionIndex" : 3
+}

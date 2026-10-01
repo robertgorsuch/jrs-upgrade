@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/home-set.schema.json",
+  "title": "jrs-upgrade home set|reset --json (ADR-0041)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["home", "previous", "base", "redirectFile", "leftBehind"],
+  "properties": {
+    "home": { "type": "string", "description": "The directory jrs-upgrade uses from now on." },
+    "previous": { "type": "string", "description": "The directory it used before." },
+    "base": { "type": "string", "description": "The home the redirect file lives in." },
+    "redirectFile": { "type": "string" },
+    "leftBehind": { "type": "boolean", "description": "True when --force left installed hotfixes, customizations or pending runs in the previous home." }
+  }
+}

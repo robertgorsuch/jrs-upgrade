@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/error.schema.json",
+  "title": "jrs-upgrade --json error document (spec §14 Phase 8, §18)",
+  "description": "Emitted on standard output by any command that refuses or fails in --json mode; the process exit code equals error.exitCode.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["error"],
+  "properties": {
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "message", "exitCode"],
+      "properties": {
+        "class": {
+          "type": "string",
+          "description": "Exception simple name, or the exit code category (UsageError, PrecheckFailed, SignatureFailed, RecoveryRequired, LockHeld, Unsupported, Cancelled).",
+          "minLength": 1
+        },
+        "message": { "type": "string" },
+        "exitCode": { "type": "integer", "minimum": 1, "maximum": 9 },
+        "remediation": { "type": "string" },
+        "details": { "type": "object" }
+      }
+    }
+  }
+}

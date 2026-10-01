@@ -1,0 +1,22 @@
+{
+  "id" : "3f51a874-afc0-4dbf-8e31-e0ae4871204f",
+  "name" : "jasperserver-pro_rest_v2_login",
+  "request" : {
+    "url" : "/jasperserver-pro/rest_v2/login",
+    "method" : "POST"
+  },
+  "response" : {
+    "status" : 400,
+    "body" : "{\"message\":\"Bad request. Parameter j_username not found. Parameter j_password not found.\",\"errorCode\":\"400\"}",
+    "headers" : {
+      "Vary" : [ "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers" ],
+      "X-XSS-Protection" : "1; mode=block",
+      "P3P" : "CP=\"ALL\"",
+      "Date" : "Fri, 11 Sep 2026 14:33:32 GMT",
+      "Content-Type" : "application/json;charset=UTF-8"
+    }
+  },
+  "uuid" : "3f51a874-afc0-4dbf-8e31-e0ae4871204f",
+  "persistent" : true,
+  "insertionIndex" : 4
+}

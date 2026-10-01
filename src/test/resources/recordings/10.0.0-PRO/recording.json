@@ -1,0 +1,9 @@
+{
+  "version" : "10.0.0",
+  "edition" : "PRO",
+  "tenancy" : "MULTI",
+  "context" : "/jasperserver-pro",
+  "source" : "recorded",
+  "recordedAt" : "2026-09-11",
+  "note" : "recorded from a live server, build 20260121_2317"
+}

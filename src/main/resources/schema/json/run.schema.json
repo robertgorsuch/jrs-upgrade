@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/run.schema.json",
+  "title": "One journaled run (core.state.RunRecord) as printed by runs list and runs show (spec §5.5)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["runId", "operation", "planId", "startedAt", "endedAt", "durationMillis", "terminalState", "exitCode", "pending"],
+  "properties": {
+    "runId": { "type": "string" },
+    "operation": { "type": "string" },
+    "planId": { "type": ["string", "null"] },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "endedAt": { "type": ["string", "null"], "format": "date-time" },
+    "durationMillis": { "type": "integer", "minimum": 0 },
+    "terminalState": {
+      "type": ["string", "null"],
+      "enum": ["SUCCEEDED", "ROLLED_BACK", "FAILED", "CANCELLED", "PRECHECK_FAILED", null]
+    },
+    "exitCode": { "type": ["integer", "null"], "minimum": 0, "maximum": 9 },
+    "pending": { "type": "boolean" }
+  }
+}

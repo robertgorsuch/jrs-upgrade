@@ -1,0 +1,104 @@
+{
+  "mappings": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "/jasperserver/rest_v2/serverInfo"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\n  \"dateFormatPattern\": \"yyyy-MM-dd\",\n  \"datetimeFormatPattern\": \"yyyy-MM-dd'T'HH:mm:ss\",\n  \"version\": \"7.5.0\",\n  \"edition\": \"CE\",\n  \"editionName\": \"Community\",\n  \"build\": \"20200115_1200\",\n  \"features\": \"\",\n  \"licenseType\": \"Commercial\",\n  \"expiration\": null\n}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/jasperserver/rest_v2/export/jrs-upgrade-probe/state"
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"message\": \"Export execution with id jrs-upgrade-probe not found\", \"errorCode\": \"export.not.found\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/jasperserver/rest_v2/import/jrs-upgrade-probe/state"
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"message\": \"Import execution with id jrs-upgrade-probe not found\", \"errorCode\": \"import.not.found\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/jasperserver/rest_v2/organizations?limit=1"
+      },
+      "response": {
+        "status": 404
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "/jasperserver/rest_v2/login"
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "Content-Type": "text/plain"
+        },
+        "body": "Bad credentials"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/jasperserver/rest_v2/resources?folderUri=%2F&recursive=false&limit=1"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"resourceLookup\": [{\"version\": 0, \"permissionMask\": 1, \"label\": \"Public\", \"uri\": \"/public\", \"resourceType\": \"folder\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/jasperserver/rest_v2/resources?folderUri=%2F&recursive=false&limit=100"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"resourceLookup\": [{\"version\": 0, \"permissionMask\": 1, \"label\": \"Public\", \"uri\": \"/public\", \"resourceType\": \"folder\"}, {\"version\": 0, \"permissionMask\": 1, \"label\": \"Temp\", \"uri\": \"/temp\", \"resourceType\": \"folder\"}, {\"version\": 0, \"permissionMask\": 1, \"label\": \"Themes\", \"uri\": \"/themes\", \"resourceType\": \"folder\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/jasperserver/rest_v2/jobs"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"jobsummary\": []}"
+      }
+    }
+  ]
+}

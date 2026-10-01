@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/outcome.schema.json",
+  "title": "The last JSONL line of a completed run: {\"outcome\": core.engine.RunOutcome} (spec §6, §18)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["outcome"],
+  "properties": {
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "runId", "exitCode"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["Succeeded", "RolledBack", "Failed", "Cancelled", "PrecheckFailed", "FingerprintMismatch"]
+        },
+        "runId": { "type": "string" },
+        "exitCode": { "type": "integer", "minimum": 0, "maximum": 9 },
+        "failedStepId": { "type": "string" },
+        "rolledBackToPhase": { "type": "string" },
+        "cause": { "type": "string" },
+        "rollbackIncomplete": { "type": "boolean" },
+        "nextAction": { "type": "string" },
+        "backups": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": "string" },
+        "stepId": { "type": "string" },
+        "message": { "type": "string" },
+        "remediation": { "type": "string" },
+        "changedKeys": { "type": "array", "items": { "type": "string" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "Succeeded" } } },
+          "then": { "properties": { "exitCode": { "const": 0 } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "RolledBack" } } },
+          "then": { "required": ["rolledBackToPhase", "cause"], "properties": { "exitCode": { "const": 3 } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "Failed" } } },
+          "then": { "required": ["cause", "rollbackIncomplete", "nextAction", "backups"] }
+        },
+        {
+          "if": { "properties": { "type": { "const": "Cancelled" } } },
+          "then": { "required": ["reason"], "properties": { "exitCode": { "const": 5 } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "PrecheckFailed" } } },
+          "then": { "required": ["stepId", "message", "remediation"], "properties": { "exitCode": { "const": 2 } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "FingerprintMismatch" } } },
+          "then": { "required": ["changedKeys"], "properties": { "exitCode": { "const": 2 } } }
+        }
+      ]
+    }
+  }
+}

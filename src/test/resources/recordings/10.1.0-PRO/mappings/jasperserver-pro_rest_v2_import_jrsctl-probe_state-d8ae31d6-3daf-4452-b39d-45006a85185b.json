@@ -1,0 +1,24 @@
+{
+  "id" : "d8ae31d6-3daf-4452-b39d-45006a85185b",
+  "name" : "jasperserver-pro_rest_v2_import_jrs-upgrade-probe_state",
+  "request" : {
+    "url" : "/jasperserver-pro/rest_v2/import/jrs-upgrade-probe/state",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 404,
+    "body" : "{\"message\":\"No export task with id jrs-upgrade-probe.\",\"errorCode\":\"no.such.export.process\",\"parameters\":[\"jrs-upgrade-probe\"]}",
+    "headers" : {
+      "Keep-Alive" : "timeout=20",
+      "Cache-Control" : "private",
+      "Vary" : [ "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers" ],
+      "X-XSS-Protection" : "1; mode=block",
+      "P3P" : "CP=\"ALL\"",
+      "Date" : "Fri, 11 Sep 2026 14:33:32 GMT",
+      "Content-Type" : "application/errorDescriptor+json"
+    }
+  },
+  "uuid" : "d8ae31d6-3daf-4452-b39d-45006a85185b",
+  "persistent" : true,
+  "insertionIndex" : 6
+}

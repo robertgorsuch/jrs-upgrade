@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/config-set.schema.json",
+  "title": "jrs-upgrade config set|unset --json (spec §5.1, #70); secrets appear as references only",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["key", "old", "new", "file"],
+  "properties": {
+    "key": { "type": "string" },
+    "old": { "type": "string", "description": "Previous value in config.yaml; empty when it was not set." },
+    "new": { "type": "string", "description": "Value now in config.yaml; empty when it is not set." },
+    "file": { "type": "string" },
+    "backup": { "type": "string", "description": "config.yaml.bak, when a previous file existed." }
+  }
+}

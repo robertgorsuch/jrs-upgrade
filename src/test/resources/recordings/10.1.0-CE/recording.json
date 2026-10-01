@@ -1,0 +1,9 @@
+{
+  "version": "10.1.0",
+  "edition": "CE",
+  "tenancy": "SINGLE",
+  "context": "/jasperserver",
+  "source": "synthesised",
+  "recordedAt": "2026-09-17",
+  "note": "derived from the 10.0.0 CE recording with the version changed: the 10.1.0 REST API reference (pp.18-19 serverInfo, 23-33 login, 108-127 export and import) documents the same contracts and the release notes list no REST change; the probe and health answers are what the compat matrix expects of this row, not observations. Replace with RecordJrsTest against a live 10.1.0 server."
+}

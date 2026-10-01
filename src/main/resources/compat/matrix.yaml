@@ -1,0 +1,100 @@
+# jrs-upgrade compatibility matrix (spec 5.7).
+# matrix version 2, unsigned: it ships inside the same artifact as any key that could verify it,
+# so a signature would add no assurance. Version ranges use npm/semver syntax as understood by
+# semver4j; JRS versions with two components (e.g. "8.2") are coerced to x.y.0 before matching.
+#
+# Sources (docs/reviews/2026-09-17-vendor-doc-review.md §1.2, §1.3, §2.1): the vendor
+# platform-support sheets for 9.0.0, 10.0.0 and 10.1.0, the 8.2.0 to 10.1.0 release notes and the
+# 8.1 to 10.1 upgrade guides. The upgrade guides name no Java at all; `javaForBuildomatic` lists
+# every JDK major the platform sheet lists for the release line (certified or runtime), because
+# buildomatic runs with the JDK on JAVA_HOME. `tomcat` lists the Tomcat versions the sheet certifies
+# for the line; 10.0 moved to Jakarta EE and runs only on Tomcat 10.1.24+ / 11.0.11+.
+matrixVersion: 2
+signed: false
+
+entries:
+  - range: ">=7.1.0 <7.5.0"
+    label: "JasperReports Server 7.1 - 7.2"
+    editions: [CE, PRO]
+    appServers: [tomcat]
+    javaForBuildomatic: [8]
+    tomcat: [">=8.5.0 <10.0.0"]
+    databases: [postgresql, mysql, oracle, mssql, db2]
+    expectedCapabilities:
+      all: [EXPORT_ASYNC, IMPORT_ASYNC, REST_LOGIN]
+      PRO: [ORGS]
+
+  - range: ">=7.5.0 <8.0.0"
+    label: "JasperReports Server 7.5 - 7.9"
+    editions: [CE, PRO]
+    appServers: [tomcat]
+    javaForBuildomatic: [8]
+    tomcat: [">=8.5.0 <10.0.0"]
+    databases: [postgresql, mysql, oracle, mssql, db2]
+    expectedCapabilities:
+      all: [EXPORT_ASYNC, IMPORT_ASYNC, REST_LOGIN, KEYSTORE_ENCRYPTION]
+      PRO: [ORGS]
+
+  - range: ">=8.0.0 <9.0.0"
+    label: "JasperReports Server 8.x"
+    editions: [CE, PRO]
+    appServers: [tomcat]
+    # release notes 8.2.0 p.9: JDK 8 and 11; 17 "in Runtime mode, but only on Tomcat 9.0.x"
+    javaForBuildomatic: [8, 11]
+    tomcat: [">=8.5.0 <10.0.0"]
+    databases: [postgresql, mysql, oracle, mssql, db2]
+    expectedCapabilities:
+      all: [EXPORT_ASYNC, IMPORT_ASYNC, REST_LOGIN, KEYSTORE_ENCRYPTION, TOKEN_AUTH, PREAUTH]
+      PRO: [ORGS]
+
+  - range: ">=9.0.0 <10.0.0"
+    label: "JasperReports Server 9.x"
+    editions: [CE, PRO]
+    appServers: [tomcat]
+    # platform-support 9.0.0 p.22: JDK 8, 11 and 17 (17 "only in runtime, and when deployed on
+    # Tomcat 9.0.x"); Tomcat 9.0.x certified, 8.5.x compatible, Jakarta servers not certified
+    javaForBuildomatic: [8, 11, 17]
+    tomcat: [">=8.5.0 <10.0.0"]
+    databases: [postgresql, mysql, oracle, mssql, db2]
+    expectedCapabilities:
+      all: [EXPORT_ASYNC, IMPORT_ASYNC, REST_LOGIN, KEYSTORE_ENCRYPTION, TOKEN_AUTH, PREAUTH]
+      PRO: [ORGS]
+
+  - range: ">=10.0.0 <10.1.0"
+    label: "JasperReports Server 10.0"
+    editions: [CE, PRO]
+    appServers: [tomcat]
+    # platform-support 10.0.0 p.20: JDK 17 only; Tomcat 10.1.24+ or 11.0.11+ (Jakarta EE 10)
+    javaForBuildomatic: [17]
+    tomcat: [">=10.1.24 <11.0.0", ">=11.0.11 <12.0.0"]
+    databases: [postgresql, mysql, oracle, mssql, db2]
+    expectedCapabilities:
+      all: [EXPORT_ASYNC, IMPORT_ASYNC, REST_LOGIN, KEYSTORE_ENCRYPTION, TOKEN_AUTH, PREAUTH]
+      PRO: [ORGS]
+
+  - range: ">=10.1.0 <11.0.0"
+    label: "JasperReports Server 10.1"
+    editions: [CE, PRO]
+    appServers: [tomcat]
+    # platform-support 10.1.0 p.20 / release notes 10.1.0 p.14: JDK 17 and 21
+    javaForBuildomatic: [17, 21]
+    tomcat: [">=10.1.24 <11.0.0", ">=11.0.11 <12.0.0"]
+    databases: [postgresql, mysql, oracle, mssql, db2]
+    expectedCapabilities:
+      all: [EXPORT_ASYNC, IMPORT_ASYNC, REST_LOGIN, KEYSTORE_ENCRYPTION, TOKEN_AUTH, PREAUTH]
+      PRO: [ORGS]
+
+# Upgrade guides 10.1 pp.10-11, 10.0 pp.11-12, 9.0 pp.10-12, 8.2 §1.1.1, 8.1 p.8. `modes` names
+# what the vendor offers for the pair; samedb is only ever offered from the previous release line.
+# A path without `modes` allows both.
+upgradePaths:
+  - { from: ">=7.1.0 <8.0.0", to: ">=7.1.0 <8.0.0", modes: [samedb, newdb] }
+  - { from: ">=7.1.0 <8.0.0", to: ">=8.0.0 <9.0.0", modes: [newdb] }
+  - { from: ">=8.0.0 <9.0.0", to: ">=8.0.0 <9.0.0", modes: [samedb, newdb] }
+  - { from: ">=8.2.0 <9.0.0", to: ">=9.0.0 <10.0.0", modes: [samedb, newdb] }
+  - { from: ">=8.0.0 <8.2.0", to: ">=9.0.0 <10.0.0", modes: [newdb] }
+  - { from: ">=8.0.0 <9.0.0", to: ">=10.0.0 <10.1.0", modes: [newdb] }
+  - { from: ">=9.0.0 <10.0.0", to: ">=9.0.0 <10.0.0", modes: [samedb, newdb] }
+  - { from: ">=9.0.0 <10.0.0", to: ">=10.0.0 <10.1.0", modes: [samedb, newdb] }
+  - { from: ">=9.0.0 <10.0.0", to: ">=10.1.0 <11.0.0", modes: [newdb] }
+  - { from: ">=10.0.0 <11.0.0", to: ">=10.0.0 <11.0.0", modes: [samedb, newdb] }

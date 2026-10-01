@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/config-keys.schema.json",
+  "title": "jrs-upgrade config keys --json (spec §5.1, #70)",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["key", "value", "source", "description"],
+    "properties": {
+      "key": { "type": "string" },
+      "value": { "type": "string", "description": "Effective value; secrets appear as references." },
+      "source": { "type": "string", "description": "--set, the JRS_UPGRADE_* variable, config.yaml or default." },
+      "description": { "type": "string" }
+    }
+  }
+}

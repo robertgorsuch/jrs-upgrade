@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/customizations-diff.schema.json",
+  "title": "jrs-upgrade customizations diff --json (spec §10.3); exit 0 when identical, 1 when not",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["path", "originalSha256", "registeredSha256", "currentSha256", "identical", "lines"],
+  "properties": {
+    "path": { "type": "string" },
+    "originalSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "registeredSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "currentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "identical": { "type": "boolean" },
+    "lines": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Unified diff lines; empty when identical."
+    }
+  }
+}

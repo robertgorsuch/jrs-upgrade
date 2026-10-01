@@ -1,0 +1,11 @@
+{
+  "dateFormatPattern": "yyyy-MM-dd",
+  "datetimeFormatPattern": "yyyy-MM-dd'T'HH:mm:ss",
+  "version": "9.0",
+  "edition": "PRO",
+  "editionName": "Enterprise",
+  "build": "20240315_1421",
+  "features": "Fusion AHD EXP DB AUD ANA MT ",
+  "licenseType": "Commercial",
+  "expiration": null
+}

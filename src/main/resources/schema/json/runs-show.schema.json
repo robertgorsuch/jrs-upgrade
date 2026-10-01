@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/runs-show.schema.json",
+  "title": "jrs-upgrade runs show <id> --json (spec §5.5, §6.6): the run, its stored plan, every step transition and its backups",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run", "plan", "transitions", "snapshots"],
+  "properties": {
+    "run": { "$ref": "https://jaspersoft.com/jrs-upgrade/run.schema.json" },
+    "plan": {
+      "oneOf": [{ "type": "null" }, { "$ref": "https://jaspersoft.com/jrs-upgrade/plan.schema.json" }]
+    },
+    "transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["seq", "ts", "runId", "stepId", "phase", "fromState", "toState", "detail"],
+        "properties": {
+          "seq": { "type": "integer", "minimum": 0 },
+          "ts": { "type": "string", "format": "date-time" },
+          "runId": { "type": "string" },
+          "stepId": { "type": "string" },
+          "phase": { "type": "string" },
+          "fromState": { "type": ["string", "null"] },
+          "toState": { "type": "string" },
+          "detail": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "snapshots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "runId", "stepId", "path", "manifestSha256", "referencedBy"],
+        "properties": {
+          "id": { "type": "string" },
+          "runId": { "type": "string" },
+          "stepId": { "type": "string" },
+          "path": { "type": "string" },
+          "manifestSha256": { "type": "string" },
+          "referencedBy": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

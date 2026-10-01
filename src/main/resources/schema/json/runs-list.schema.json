@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/runs-list.schema.json",
+  "title": "jrs-upgrade runs list --json (spec §5.5), most recent first",
+  "type": "array",
+  "items": { "$ref": "https://jaspersoft.com/jrs-upgrade/run.schema.json" }
+}

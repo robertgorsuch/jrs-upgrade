@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/home-show.schema.json",
+  "title": "jrs-upgrade home show --json (ADR-0041)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["home", "source", "base", "freeBytes", "usage"],
+  "properties": {
+    "home": { "type": "string", "description": "The directory jrs-upgrade uses." },
+    "source": { "enum": ["--home", "JRS_UPGRADE_HOME", "default"], "description": "What chose the base home." },
+    "base": { "type": "string", "description": "The home before any redirect." },
+    "redirectFile": { "type": "string", "description": "The redirect file in the base home, when there is one." },
+    "freeBytes": { "type": "integer", "description": "Free space on the home's volume; -1 when unknown." },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshots", "runs", "logs", "other"],
+      "properties": {
+        "snapshots": { "type": "integer", "minimum": 0 },
+        "runs": { "type": "integer", "minimum": 0 },
+        "logs": { "type": "integer", "minimum": 0 },
+        "other": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

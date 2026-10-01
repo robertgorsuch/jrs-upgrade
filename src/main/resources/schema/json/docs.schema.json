@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/docs.schema.json",
+  "title": "jrs-upgrade docs --json (spec §14 Phase 8 offline docs): the embedded documents",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name", "title", "bytes"],
+    "properties": {
+      "name": { "type": "string" },
+      "title": { "type": "string" },
+      "bytes": { "type": "integer", "minimum": 0 }
+    }
+  }
+}

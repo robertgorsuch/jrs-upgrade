@@ -1,0 +1,24 @@
+{
+  "id" : "828f3e09-5d16-49e7-a21e-485c14e15ae4",
+  "name" : "jasperserver-pro_rest_v2_serverinfo",
+  "request" : {
+    "url" : "/jasperserver-pro/rest_v2/serverInfo",
+    "method" : "GET"
+  },
+  "response" : {
+    "status" : 200,
+    "body" : "{\"dateFormatPattern\":\"yyyy-MM-dd\",\"datetimeFormatPattern\":\"yyyy-MM-dd'T'HH:mm:ss\",\"version\":\"10.0.0\",\"edition\":\"PRO\",\"editionName\":\"Enterprise\",\"licenseType\":\"Commercial\",\"build\":\"20260121_2317\",\"expiration\":\"2026-12-31T00:00:00\",\"features\":\"ANA AUD MT FUSION DB AHD DS AL RB DV VJ WL CL \"}",
+    "headers" : {
+      "Keep-Alive" : "timeout=20",
+      "Cache-Control" : "private",
+      "Vary" : [ "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers" ],
+      "X-XSS-Protection" : "1; mode=block",
+      "P3P" : "CP=\"ALL\"",
+      "Date" : "Fri, 11 Sep 2026 14:33:31 GMT",
+      "Content-Type" : "application/json"
+    }
+  },
+  "uuid" : "828f3e09-5d16-49e7-a21e-485c14e15ae4",
+  "persistent" : true,
+  "insertionIndex" : 8
+}

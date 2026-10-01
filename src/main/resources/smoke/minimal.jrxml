@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Minimal report uploaded by `jrs-upgrade smoke --mutating`; needs no data source. -->
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="jrsupgrade_smoke" pageWidth="595" pageHeight="842" columnWidth="555"
+              leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20"
+              whenNoDataType="AllSectionsNoDetail">
+  <title>
+    <band height="60">
+      <staticText>
+        <reportElement x="0" y="10" width="555" height="30"/>
+        <textElement>
+          <font size="16"/>
+        </textElement>
+        <text><![CDATA[jrs-upgrade smoke test report]]></text>
+      </staticText>
+    </band>
+  </title>
+</jasperReport>

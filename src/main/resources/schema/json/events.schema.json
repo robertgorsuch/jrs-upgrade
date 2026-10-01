@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/events.schema.json",
+  "title": "One core.event.Event as a JSONL line (spec §5.9, §6.3), discriminated by type",
+  "type": "object",
+  "required": ["type", "ts", "runId", "phase"],
+  "oneOf": [
+    { "$ref": "#/$defs/PlanCreated" },
+    { "$ref": "#/$defs/StepPending" },
+    { "$ref": "#/$defs/StepRunning" },
+    { "$ref": "#/$defs/StepRetry" },
+    { "$ref": "#/$defs/StepSucceeded" },
+    { "$ref": "#/$defs/StepFailed" },
+    { "$ref": "#/$defs/StepSkipped" },
+    { "$ref": "#/$defs/StepRolledBack" },
+    { "$ref": "#/$defs/StepRollbackFailed" },
+    { "$ref": "#/$defs/Log" },
+    { "$ref": "#/$defs/RunSucceeded" },
+    { "$ref": "#/$defs/RunFailed" },
+    { "$ref": "#/$defs/RunCancelled" },
+    { "$ref": "#/$defs/RunRolledBack" }
+  ],
+  "$defs": {
+    "ts": { "type": "string", "format": "date-time" },
+    "runId": { "type": "string" },
+    "phase": { "type": "string", "description": "Phase of the step, or \"run\" for run-level events." },
+    "stepId": { "type": ["string", "null"] },
+    "paths": { "type": "array", "items": { "type": "string" } },
+    "stepFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "cause", "affectedPaths", "affectedUris", "backups", "nextAction"],
+      "properties": {
+        "type": { "type": "string", "enum": ["Retryable", "Recoverable", "Fatal"] },
+        "cause": { "type": "string" },
+        "affectedPaths": { "$ref": "#/$defs/paths" },
+        "affectedUris": { "type": "array", "items": { "type": "string" } },
+        "backups": { "$ref": "#/$defs/paths" },
+        "nextAction": { "type": "string" }
+      }
+    },
+    "PlanCreated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "phase", "planId", "fingerprint"],
+      "properties": {
+        "type": { "const": "PlanCreated" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "type": "null" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "planId": { "type": "string" },
+        "fingerprint": { "type": "string" }
+      }
+    },
+    "StepPending": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "stepId", "phase", "title"],
+      "properties": {
+        "type": { "const": "StepPending" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "$ref": "#/$defs/stepId" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "title": { "type": "string" }
+      }
+    },
+    "StepRunning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "stepId", "phase", "title"],
+      "properties": {
+        "type": { "const": "StepRunning" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "$ref": "#/$defs/stepId" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "title": { "type": "string" }
+      }
+    },
+    "StepRetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "stepId", "phase", "attempt", "maxAttempts", "delayMillis", "cause"],
+      "properties": {
+        "type": { "const": "StepRetry" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "$ref": "#/$defs/stepId" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "attempt": { "type": "integer", "minimum": 1 },
+        "maxAttempts": { "type": "integer", "minimum": 1 },
+        "delayMillis": { "type": "integer", "minimum": 0 },
+        "cause": { "type": "string" }
+      }
+    },
+    "StepSucceeded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "stepId", "phase", "elapsedMillis"],
+      "properties": {
+        "type": { "const": "StepSucceeded" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "$ref": "#/$defs/stepId" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "elapsedMillis": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "StepFailed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "stepId", "phase", "failure"],
+      "properties": {
+        "type": { "const": "StepFailed" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "$ref": "#/$defs/stepId" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "failure": { "$ref": "#/$defs/stepFailure" }
+      }
+    },
+    "StepSkipped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "stepId", "phase", "reason"],
+      "properties": {
+        "type": { "const": "StepSkipped" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "$ref": "#/$defs/stepId" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "reason": { "type": "string" }
+      }
+    },
+    "StepRolledBack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "stepId", "phase", "elapsedMillis"],
+      "properties": {
+        "type": { "const": "StepRolledBack" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "$ref": "#/$defs/stepId" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "elapsedMillis": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "StepRollbackFailed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "stepId", "phase", "cause", "backups"],
+      "properties": {
+        "type": { "const": "StepRollbackFailed" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "$ref": "#/$defs/stepId" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "cause": { "type": "string" },
+        "backups": { "$ref": "#/$defs/paths" }
+      }
+    },
+    "Log": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "stepId", "phase", "level", "message"],
+      "properties": {
+        "type": { "const": "Log" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "$ref": "#/$defs/stepId" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "level": { "type": "string", "enum": ["DEBUG", "INFO", "WARN", "ERROR"] },
+        "message": { "type": "string" }
+      }
+    },
+    "RunSucceeded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "phase", "elapsedMillis"],
+      "properties": {
+        "type": { "const": "RunSucceeded" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "type": "null" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "elapsedMillis": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "RunFailed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "phase", "cause", "backups", "nextAction", "rollbackIncomplete"],
+      "properties": {
+        "type": { "const": "RunFailed" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "type": "null" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "cause": { "type": "string" },
+        "backups": { "$ref": "#/$defs/paths" },
+        "nextAction": { "type": "string" },
+        "rollbackIncomplete": { "type": "boolean" }
+      }
+    },
+    "RunCancelled": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "phase", "detail"],
+      "properties": {
+        "type": { "const": "RunCancelled" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "type": "null" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "detail": { "type": "string" }
+      }
+    },
+    "RunRolledBack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ts", "runId", "phase", "rolledBackToPhase", "cause"],
+      "properties": {
+        "type": { "const": "RunRolledBack" },
+        "ts": { "$ref": "#/$defs/ts" },
+        "runId": { "$ref": "#/$defs/runId" },
+        "stepId": { "type": "null" },
+        "phase": { "$ref": "#/$defs/phase" },
+        "rolledBackToPhase": { "type": "string" },
+        "cause": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaspersoft.com/jrs-upgrade/plan.schema.json",
+  "title": "A jrs-upgrade Plan (spec §6.2): the first JSONL line of every plan-running command and the document stored in the plans table",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["planId", "operation", "summary", "fingerprint", "steps"],
+  "properties": {
+    "planId": { "type": "string" },
+    "operation": { "type": "string" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "target",
+        "filesTouched",
+        "resourcesTouched",
+        "serviceRestart",
+        "backupLocations",
+        "rollbackPointsByPhase",
+        "strategy",
+        "warnings"
+      ],
+      "properties": {
+        "operation": { "type": "string" },
+        "target": { "type": "string" },
+        "filesTouched": { "type": "array", "items": { "type": "string" } },
+        "resourcesTouched": { "type": "array", "items": { "type": "string" } },
+        "serviceRestart": { "type": "boolean" },
+        "backupLocations": { "type": "array", "items": { "type": "string" } },
+        "rollbackPointsByPhase": { "type": "object", "additionalProperties": { "type": "string" } },
+        "strategy": { "type": "string" },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "inputs"],
+      "properties": {
+        "value": { "type": "string" },
+        "inputs": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "phase", "title", "detail", "irreversible"],
+        "properties": {
+          "id": { "type": "string" },
+          "phase": { "type": "string" },
+          "title": { "type": "string" },
+          "detail": { "type": "string" },
+          "irreversible": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

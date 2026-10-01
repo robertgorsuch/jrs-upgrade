@@ -1,0 +1,9 @@
+{
+  "version": "10.0.0",
+  "edition": "CE",
+  "tenancy": "SINGLE",
+  "context": "/jasperserver",
+  "source": "synthesised",
+  "recordedAt": "2026-09-11",
+  "note": "serverInfo is the fixture recorded from a real 10.0.0 CE server; the probe and health answers are what the compat matrix expects of this row, not observations. Replace with RecordJrsTest against a live server of this version."
+}

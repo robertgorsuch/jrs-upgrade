@@ -1,0 +1,9 @@
+{
+  "version": "7.1.0",
+  "edition": "PRO",
+  "tenancy": "MULTI",
+  "context": "/jasperserver-pro",
+  "source": "synthesised",
+  "recordedAt": "2026-09-11",
+  "note": "serverInfo is the fixture recorded from a real 7.1.0 PRO server; the probe and health answers are what the compat matrix expects of this row, not observations. Replace with RecordJrsTest against a live server of this version."
+}

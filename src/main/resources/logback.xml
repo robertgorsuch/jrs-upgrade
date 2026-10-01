@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  jrs-upgrade logging (spec 5.8). Every appender renders the message through %redact and stack traces
+  through %redactEx, both backed by Redactor.global(), so no secret registered with the redactor
+  and none of the well-known patterns (password=, Authorization:, JSESSIONID, Bearer ...) can reach
+  a console or file. Override the JSON log location with -Djrs-upgrade.log.file=<path>.
+-->
+<configuration>
+  <conversionRule conversionWord="redact"
+                  class="com.jaspersoft.jrsupgrade.core.redact.RedactingConverter"/>
+  <conversionRule conversionWord="redactEx"
+                  class="com.jaspersoft.jrsupgrade.core.redact.RedactingThrowableConverter"/>
+
+  <!-- The console shows warnings and errors; INFO is for the file. Main sets jrs-upgrade.log.console
+       to OFF for JSON output so standard error stays silent (spec §18, review 4.5). Lines carry
+       the date and the zone offset so hosts in different zones correlate (review 3.7). -->
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <target>System.err</target>
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+      <level>${jrs-upgrade.log.console:-WARN}</level>
+    </filter>
+    <encoder>
+      <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level %logger{24} - %redact%n%redactEx</pattern>
+    </encoder>
+  </appender>
+
+  <appender name="JSON" class="ch.qos.logback.core.FileAppender">
+    <file>${jrs-upgrade.log.file:-${java.io.tmpdir}/jrs-upgrade.log}</file>
+    <append>true</append>
+    <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+      <providers>
+        <timestamp><fieldName>ts</fieldName></timestamp>
+        <logLevel><fieldName>level</fieldName></logLevel>
+        <loggerName><fieldName>logger</fieldName></loggerName>
+        <threadName><fieldName>thread</fieldName></threadName>
+        <!-- runId while a run executes (#160), so a support bundle can pick the run's lines -->
+        <mdc/>
+        <pattern>
+          <omitEmptyFields>true</omitEmptyFields>
+          <pattern>{"message":"%redact","stack_trace":"%redactEx"}</pattern>
+        </pattern>
+      </providers>
+    </encoder>
+  </appender>
+
+  <root level="${jrs-upgrade.log.level:-INFO}">
+    <appender-ref ref="CONSOLE"/>
+    <appender-ref ref="JSON"/>
+  </root>
+</configuration>
