@@ -520,9 +520,7 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
       steps.add(ServiceSteps.start(rt, Phases.RECONCILE, reapply + "-start-service"));
       steps.add(ServiceSteps.waitForServer(rt, Phases.RECONCILE, reapply + "-wait-for-server"));
     }
-    if (VendorPreconditions.atLeast(options.toVersion(), VendorPreconditions.ANALYTICS_JNDI_FROM)
-        && VendorPreconditions.below(
-            options.toVersion(), VendorPreconditions.ANALYTICS_JNDI_BELOW)) {
+    if (AnalyticsJndiSteps.applies(options.toVersion(), rt.store().customizations())) {
       // release notes 9.0 p.15 (issue #108): the two analytics JNDI resources, a WARN when missing
       steps.add(new AnalyticsJndiSteps.Check(rt, in));
     }
