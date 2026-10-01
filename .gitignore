@@ -7,3 +7,7 @@ target/
 .DS_Store
 hs_err_pid*
 .flattened-pom.xml
+
+# test byproducts written into the working directory
+.jqwik-database
+/systemctl
