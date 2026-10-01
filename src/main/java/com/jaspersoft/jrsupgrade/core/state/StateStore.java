@@ -16,7 +16,6 @@ import java.sql.Statement;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -24,16 +23,18 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The SQLite state store at {@code $JRS_UPGRADE_HOME/state.db}: the single source of truth for run
- * state, installed hotfixes, plans, snapshots and audit (spec §5.4). Invariants: opened with WAL,
- * {@code synchronous=FULL}, foreign keys on and a 5 s busy timeout; migrations run on open and are
- * idempotent; every write happens inside a {@code BEGIN IMMEDIATE ... COMMIT} transaction; {@code
- * step_transitions} and {@code audit} are append-only (enforced by triggers); every public method
- * is thread-safe and never returns {@code null}. {@code SQLException} never escapes; failures are
- * reported as {@link StateStoreException}. A damaged file is refused on open: {@code PRAGMA
- * quick_check} runs before the migrations and a result other than {@code ok} raises {@link
- * StateStoreException} naming the file and the way out ({@link #corruptionRemediation}), so
- * corruption surfaces at start rather than in whatever query first touches it. {@link #close()}
- * never throws: it runs after a run's outcome is journaled, and a failure to close is logged.
+ * state, customizations, plans, snapshots and audit (spec §5.4). The {@code hotfixes_installed} and
+ * {@code hotfix_files} tables the migrations still create (shared with homes jrsctl wrote) are
+ * neither read nor written (ADR-0004). Invariants: opened with WAL, {@code synchronous=FULL},
+ * foreign keys on and a 5 s busy timeout; migrations run on open and are idempotent; every write
+ * happens inside a {@code BEGIN IMMEDIATE ... COMMIT} transaction; {@code step_transitions} and
+ * {@code audit} are append-only (enforced by triggers); every public method is thread-safe and
+ * never returns {@code null}. {@code SQLException} never escapes; failures are reported as {@link
+ * StateStoreException}. A damaged file is refused on open: {@code PRAGMA quick_check} runs before
+ * the migrations and a result other than {@code ok} raises {@link StateStoreException} naming the
+ * file and the way out ({@link #corruptionRemediation}), so corruption surfaces at start rather
+ * than in whatever query first touches it. {@link #close()} never throws: it runs after a run's
+ * outcome is journaled, and a failure to close is logged.
  */
 public final class StateStore implements Journal, AutoCloseable {
 
@@ -47,7 +48,6 @@ public final class StateStore implements Journal, AutoCloseable {
 
   private final Db db;
   private final Servers servers;
-  private final Hotfixes hotfixes;
   private final Customizations customizations;
   private final Plans plans;
   private final Runs runs;
@@ -58,7 +58,6 @@ public final class StateStore implements Journal, AutoCloseable {
   StateStore(Connection conn, Path file, Clock clock) {
     this.db = new Db(conn, file);
     this.servers = new Servers(db);
-    this.hotfixes = new Hotfixes(db);
     this.customizations = new Customizations(db);
     this.plans = new Plans(db);
     this.runs = new Runs(db);
@@ -186,7 +185,7 @@ public final class StateStore implements Journal, AutoCloseable {
     return "stop every jrs-upgrade process, move "
         + file
         + " aside (for example to state.db.corrupt-<date>), then restore state.db from the most"
-        + " recent support bundle or let jrs-upgrade create a fresh one; runs and installed hotfixes"
+        + " recent support bundle or let jrs-upgrade create a fresh one; runs and customizations"
         + " recorded only in the damaged file are not recoverable from it";
   }
 
@@ -216,41 +215,6 @@ public final class StateStore implements Journal, AutoCloseable {
 
   public List<ServerRecord> servers() {
     return servers.servers();
-  }
-
-  /** Records an installed hotfix and its files in one transaction. */
-  public void recordHotfixInstalled(HotfixInstalled hotfix, List<HotfixFile> files) {
-    hotfixes.recordHotfixInstalled(hotfix, files);
-  }
-
-  public void updateHotfixState(String hotfixId, HotfixState state) {
-    hotfixes.updateHotfixState(hotfixId, state);
-  }
-
-  /** Hotfixes currently in state {@code INSTALLED}, oldest first (the LIFO order for rollback). */
-  public List<HotfixInstalled> installedHotfixes() {
-    return hotfixes.installedHotfixes();
-  }
-
-  /** Every hotfix ever recorded, in any state, oldest first. */
-  public List<HotfixInstalled> hotfixes() {
-    return hotfixes.hotfixes();
-  }
-
-  public Optional<HotfixInstalled> hotfix(String id) {
-    return hotfixes.hotfix(id);
-  }
-
-  public List<HotfixFile> hotfixFiles(String hotfixId) {
-    return hotfixes.hotfixFiles(hotfixId);
-  }
-
-  /**
-   * Files among {@code paths} that belong to a hotfix in state {@code INSTALLED}; used for the
-   * overlap check (spec §8.4). Paths are compared by their string form.
-   */
-  public List<HotfixFile> filesOwnedBy(Collection<Path> paths) {
-    return hotfixes.filesOwnedBy(paths);
   }
 
   public void registerCustomization(Customization customization) {
@@ -375,11 +339,6 @@ public final class StateStore implements Journal, AutoCloseable {
    */
   public int deleteSnapshotsOf(String runId) {
     return snapshots.deleteSnapshotsOf(runId);
-  }
-
-  /** Removes one installed hotfix and the file rows it owns, in one transaction. */
-  public int deleteHotfix(String hotfixId) {
-    return hotfixes.deleteHotfix(hotfixId);
   }
 
   /**

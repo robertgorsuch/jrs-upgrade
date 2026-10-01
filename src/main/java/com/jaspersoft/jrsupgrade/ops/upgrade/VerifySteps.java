@@ -8,8 +8,6 @@ import com.jaspersoft.jrsupgrade.core.engine.StepResult;
 import com.jaspersoft.jrsupgrade.core.event.Event;
 import com.jaspersoft.jrsupgrade.core.event.EventSink;
 import com.jaspersoft.jrsupgrade.core.json.Json;
-import com.jaspersoft.jrsupgrade.core.state.HotfixInstalled;
-import com.jaspersoft.jrsupgrade.core.state.HotfixState;
 import com.jaspersoft.jrsupgrade.core.state.SnapshotRecord;
 import com.jaspersoft.jrsupgrade.core.state.StateStore;
 import com.jaspersoft.jrsupgrade.ops.ReportItem;
@@ -22,30 +20,23 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Phase E of spec §10.2: the non-mutating smoke test and the final record. Invariants: a smoke FAIL
  * is a {@code Recoverable} failure whose next action names the point-B rollback command;
- * record-upgrade marks every hotfix that was installed before this run and not re-applied by it as
- * {@code SUPERSEDED}, writes {@code upgrade.json} next to the backups and registers the snapshot
- * set as retention-protected ({@code referenced_by = 'upgrade'}); the marker that lists the
- * superseded ids is merged, never overwritten, so a re-execution after a crash keeps them and the
- * compensation that puts the hotfix states back stays complete.
+ * record-upgrade writes {@code upgrade.json} next to the backups and registers the snapshot set as
+ * retention-protected ({@code referenced_by = 'upgrade'}), both rewritten alike on a re-execution;
+ * it reads and writes no hotfix ledger (ADR-0004).
  */
 final class VerifySteps {
 
   static final String SMOKE = "smoke";
   static final String RECORD_UPGRADE = "record-upgrade";
   static final String AUDIT_COMPLETED = "upgrade.completed";
-  static final String AUDIT_SUPERSEDED = "hotfix.superseded";
-  static final String AUDIT_REVERTED = "upgrade.record-reverted";
-  static final String SUPERSEDED_MARKER = RECORD_UPGRADE + ".superseded";
 
   private VerifySteps() {}
 
@@ -163,10 +154,6 @@ final class VerifySteps {
       this.facts = Map.copyOf(facts);
     }
 
-    private Path marker(Context ctx) {
-      return ctx.home().runDir(ctx.runId()).resolve(SUPERSEDED_MARKER);
-    }
-
     @Override
     public String id() {
       return RECORD_UPGRADE;
@@ -174,7 +161,7 @@ final class VerifySteps {
 
     @Override
     public String title() {
-      return "record the upgrade (hotfix states, protected snapshot set, audit)";
+      return "record the upgrade (upgrade.json, protected snapshot set, audit)";
     }
 
     @Override
@@ -184,7 +171,7 @@ final class VerifySteps {
 
     @Override
     public String detail() {
-      return "hotfixes not re-applied -> SUPERSEDED; snapshots row referenced_by=upgrade";
+      return "upgrade.json beside the backups; snapshots row referenced_by=upgrade";
     }
 
     @Override
@@ -195,32 +182,8 @@ final class VerifySteps {
     @Override
     public StepResult execute(Context ctx, EventSink out) {
       StateStore store = rt.store();
-      List<String> superseded = new ArrayList<>();
-      for (HotfixInstalled h : store.installedHotfixes()) {
-        if (h.installedRunId().startsWith(ctx.runId())) {
-          continue;
-        }
-        store.updateHotfixState(h.id(), HotfixState.SUPERSEDED);
-        store.audit(
-            rt.actor(), AUDIT_SUPERSEDED, h.id() + " superseded by upgrade run " + ctx.runId());
-        superseded.add(h.id());
-        Logs.info(rt, ctx, out, this, h.id() + " marked SUPERSEDED");
-      }
       SnapshotSet set = in.snapshots(ctx);
       try {
-        Files.createDirectories(marker(ctx).getParent());
-        // A re-execution after a crash finds the hotfixes already SUPERSEDED and would otherwise
-        // overwrite the marker with an empty list, leaving compensation nothing to put back.
-        Set<String> recorded = new LinkedHashSet<>();
-        if (Files.isRegularFile(marker(ctx))) {
-          for (String id : Files.readAllLines(marker(ctx), StandardCharsets.UTF_8)) {
-            if (!id.isBlank()) {
-              recorded.add(id.strip());
-            }
-          }
-        }
-        recorded.addAll(superseded);
-        Files.writeString(marker(ctx), String.join("\n", recorded), StandardCharsets.UTF_8);
         Files.createDirectories(set.dir());
         Files.writeString(
             set.manifest(), Json.writePretty(manifest(ctx, set)), StandardCharsets.UTF_8);
@@ -276,28 +239,15 @@ final class VerifySteps {
       return m;
     }
 
+    /*
+     * Nothing to put back: upgrade.json and the protected snapshot row describe the point-B
+     * backups, which a rollback of this run reads (recordedBuildomatic, readMode), so they are
+     * kept whatever happens after this step; the hotfix states this used to revert are gone with
+     * the ledger (ADR-0004).
+     */
     @Override
     public StepResult compensate(Context ctx, EventSink out) {
-      StateStore store = rt.store();
-      try {
-        if (Files.isRegularFile(marker(ctx))) {
-          for (String id : Files.readAllLines(marker(ctx), StandardCharsets.UTF_8)) {
-            if (!id.isBlank()) {
-              store.updateHotfixState(id.strip(), HotfixState.INSTALLED);
-              store.audit(
-                  rt.actor(),
-                  AUDIT_REVERTED,
-                  id.strip() + " back to INSTALLED (run " + ctx.runId() + ")");
-            }
-          }
-          Files.deleteIfExists(marker(ctx));
-        }
-        return StepResult.ok();
-      } catch (IOException | RuntimeException e) {
-        return Failures.recoverable(
-            "cannot revert the upgrade record: " + Failures.describe(e),
-            "check hotfix states with jrs-upgrade hotfix list");
-      }
+      return StepResult.ok();
     }
   }
 }

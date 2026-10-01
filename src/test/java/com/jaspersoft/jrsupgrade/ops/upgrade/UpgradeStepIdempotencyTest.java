@@ -10,8 +10,6 @@ import com.jaspersoft.jrsupgrade.core.engine.RunOutcome;
 import com.jaspersoft.jrsupgrade.core.engine.Step;
 import com.jaspersoft.jrsupgrade.core.engine.StepResult;
 import com.jaspersoft.jrsupgrade.core.platform.ServiceController;
-import com.jaspersoft.jrsupgrade.core.state.HotfixInstalled;
-import com.jaspersoft.jrsupgrade.core.state.HotfixState;
 import com.jaspersoft.jrsupgrade.jrs.api.KeystoreInfo;
 import com.jaspersoft.jrsupgrade.ops.FakeJrsAdapter;
 import com.jaspersoft.jrsupgrade.ops.Idempotency;
@@ -67,7 +65,6 @@ class UpgradeStepIdempotencyTest {
     m.putAll(Idempotency.tree("runs", f.fake.home.runs(), UpgradeStepIdempotencyTest::normalised));
     m.putAll(Idempotency.tree("keystore", f.keystoreDir));
     m.put("service", f.fake.platform.serviceState.name());
-    m.put("hotfixes", f.store().hotfixes().toString());
     m.put("customizations", f.store().customizations().toString());
     m.put("snapshot-rows", f.store().snapshots(runId).toString());
     return m;
@@ -120,11 +117,6 @@ class UpgradeStepIdempotencyTest {
 
   private static final String CHANGED_XML =
       "<Context docBase=\"jasperserver-pro\" changed=\"yes\"/>";
-
-  private static HotfixInstalled installed(String id, String runId) {
-    return new HotfixInstalled(
-        id, "1", "old fix " + id, runId, Optional.empty(), HotfixState.INSTALLED, Instant.EPOCH);
-  }
 
   private static UpgradeInput input(UpgradeFixture f) throws IOException {
     return new UpgradeInput(
@@ -863,36 +855,26 @@ class UpgradeStepIdempotencyTest {
     }
   }
 
-  /**
-   * The second execution finds no INSTALLED hotfix left (the first one superseded them all) and
-   * must not lose the recorded list, or the compensation could no longer put the states back.
-   */
+  /** ADR-0004: the record is rewritten alike, and no hotfix state is touched any more. */
   @Test
-  void should_keep_the_superseded_list_when_record_upgrade_executes_twice() throws Exception {
+  void should_rewrite_the_same_record_when_record_upgrade_executes_twice() throws Exception {
     try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
-      f.store().recordHotfixInstalled(installed("HF-OLD", "r-old"), List.of());
       Plan plan = f.ops().planUpgrade(newdb(f));
       Context ctx = start(f, plan, "r-ru");
       Idempotency.runAll(plan, ctx);
       Map<String, String> once = state(f, "r-ru");
-      Step step = Idempotency.step(plan, "record-upgrade");
 
-      Idempotency.executeOk(step, ctx);
+      Idempotency.executeOk(Idempotency.step(plan, "record-upgrade"), ctx);
 
       assertThat(state(f, "r-ru")).isEqualTo(once);
-      assertThat(f.fake.home.runDir("r-ru").resolve("record-upgrade.superseded"))
-          .hasContent("HF-OLD");
-      Idempotency.compensateOk(step, ctx);
-      assertThat(f.store().hotfix("HF-OLD").orElseThrow().state()).isEqualTo(HotfixState.INSTALLED);
+      assertThat(f.fake.home.runDir("r-ru").resolve("record-upgrade.superseded")).doesNotExist();
     }
   }
 
   @Test
   void should_converge_when_record_upgrade_compensates_twice() throws Exception {
     try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
-      f.store().recordHotfixInstalled(installed("HF-OLD", "r-old"), List.of());
       assertCompensationConverges(f, f.ops().planUpgrade(newdb(f)), "r-ru-c", "record-upgrade");
-      assertThat(f.store().hotfix("HF-OLD").orElseThrow().state()).isEqualTo(HotfixState.INSTALLED);
     }
   }
 

@@ -61,7 +61,7 @@ final class SmokePlan {
             new DeleteFolder(folder));
     PlanSummary summary =
         new PlanSummary(
-            "smoke --mutating",
+            SmokeOperation.MUTATING_OPERATION,
             identity.baseUrl().toString(),
             List.of(),
             List.of(folder, reportUri(runId)),

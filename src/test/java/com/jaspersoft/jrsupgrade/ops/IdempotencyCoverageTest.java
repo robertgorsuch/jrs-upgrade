@@ -127,7 +127,7 @@ import org.junit.jupiter.api.Test;
  *         #should_restore_every_file_when_plan_customization_reapply_compensates_after_a_partial_re_execution</td>
  *     <td>UpgradeStepIdempotencyTest#should_converge_when_plan_customization_reapply_compensates_twice</td></tr>
  * <tr><td>upgrade VerifySteps.RecordUpgrade</td>
- *     <td>UpgradeStepIdempotencyTest#should_keep_the_superseded_list_when_record_upgrade_executes_twice</td>
+ *     <td>UpgradeStepIdempotencyTest#should_rewrite_the_same_record_when_record_upgrade_executes_twice</td>
  *     <td>UpgradeStepIdempotencyTest#should_converge_when_record_upgrade_compensates_twice</td></tr>
  * <tr><td>upgrade JrsUpgradeConfigSteps.PointConfigAtTarget</td>
  *     <td>UpgradeStepIdempotencyTest#should_keep_the_pre_upgrade_copy_when_point_config_at_target_executes_twice</td>
@@ -397,7 +397,7 @@ class IdempotencyCoverageTest {
           Map.entry(
               OPS + "upgrade.VerifySteps$RecordUpgrade",
               U
-                  + "should_keep_the_superseded_list_when_record_upgrade_executes_twice;"
+                  + "should_rewrite_the_same_record_when_record_upgrade_executes_twice;"
                   + U
                   + "should_converge_when_record_upgrade_compensates_twice"),
           Map.entry(

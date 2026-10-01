@@ -598,10 +598,7 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
     Optional<PatchedWar> war = options.war().map(w -> patchedWar(w, in, warnings));
     // issue #9: hotfix labels the product never reached, named next to the version that runs
     identity.ifPresent(
-        id ->
-            warnings.addAll(
-                HotfixLabels.mismatches(
-                    in.webappDir(), id.version(), rt.store().installedHotfixes())));
+        id -> warnings.addAll(HotfixLabels.mismatches(in.webappDir(), id.version())));
     // ADR-0003: what becomes of the registered customizations on the target, read from the WAR
     // that will be deployed
     Optional<Path> targetWebapp =

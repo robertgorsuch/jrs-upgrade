@@ -91,8 +91,9 @@ cannot be trusted is worse than none. What to do:
 2. Move the file aside: `state.db` to `state.db.corrupt-<date>` (and `state.db-wal`,
    `state.db-shm` next to it, if present). Keep the copies for support.
 3. Restore `state.db` from the most recent support bundle, or start with none: jrs-upgrade creates a
-   fresh one on the next command. A fresh store does not know the hotfixes installed or the runs
-   made through the damaged one; `jrs-upgrade hotfix list` will be empty until they are re-registered.
+   fresh one on the next command. A fresh store does not know the customizations registered or
+   the runs made through the damaged one; register the customizations again
+   (`jrs-upgrade customizations scan --register`).
 4. Run `jrs-upgrade doctor`; the `state` item must be PASS before any mutating command.
 
 ## "the run journal could not be written"
@@ -142,7 +143,7 @@ keystore from its backup on rollback.
 `jrs-upgrade hotfix rollback <id>` at any later time restores every file from the snapshot the apply
 run took and runs the bundle's rollback SQL in reverse. A hotfix declared `"rollback":
 "irreversible"` has no SQL rollback; its files are still restored and the plan says which database
-changes remain. Snapshots of installed hotfixes are never pruned.
+changes remain. jrs-upgrade never prunes the snapshots of a run another tool journaled in the home (ADR-0004).
 
 ## Getting the facts to whoever helps you
 

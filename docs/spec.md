@@ -6,8 +6,11 @@
 > removed web console, the build phases and the v1.0 definition of done are left out. Where the
 > text says "module" read "package": jrs-upgrade is one Maven module with the four roots `core`,
 > `jrs`, `ops` and `app` as sub-packages. The hotfix re-apply step (§10.2 step 12) and the
-> `--reapply-hotfixes` flag no longer exist. A slimmed specification replaces this file when the
-> baseline has been reshaped (see the issues in the repository).
+> `--reapply-hotfixes` flag no longer exist. ADR-0004 retires the hotfix ledger: the
+> `hotfixes_installed` and `hotfix_files` tables stay in the schema but are neither read nor
+> written, `RecordUpgrade` marks no hotfix, and retention protects every run another tool
+> journaled instead of the runs of installed hotfixes. A slimmed specification replaces this file
+> when the baseline has been reshaped (see the issues in the repository).
 
 ## 2. Definitions
 
@@ -184,6 +187,7 @@ Rules:
   - `servers` — detected identity, last seen.
   - `hotfixes_installed` — `id` (manifest id, the primary key), version, installed run, snapshot ref, state (`INSTALLED`, `ROLLED_BACK`, `SUPERSEDED`), origin (`JRSCTL`, the row owns its files and a snapshot; `RECORDED`, applied by hand and entered with `hotfix record`, nothing to roll back; ADR-0030, V003).
   - `hotfix_files` — every path a hotfix added/replaced/deleted, with before/after hashes; used for overlap and LIFO rollback checks (§8.4).
+  - jrs-upgrade keeps both hotfix tables for homes jrsctl wrote but never reads or writes them (ADR-0004).
   - `customizations` — registered paths with original hash at registration and snapshot ref (§10.3).
   - `plans` — serialized Plan JSON, fingerprint, created at, expires at (TTL 30 minutes), consumed by run id.
   - `runs` — id, op, plan id, started, ended, terminal state, exit code.
@@ -202,7 +206,7 @@ Rules:
 
 - `snapshots/<runId>/<stepId>/` containing payload and `manifest.json` with SHA-256 per file, source paths, permissions/ACLs, owner, and timestamp.
 - Verified on creation and again before any restore.
-- Retention pruning respects `backups.*` and never prunes a snapshot referenced by an installed hotfix, by a registered customization, or by the most recent successful upgrade.
+- Retention pruning respects `backups.*` and never prunes a snapshot of a run another tool journaled in the home (jrs-upgrade's ledger-free replacement for "referenced by an installed hotfix", ADR-0004), referenced by a registered customization, or by the most recent successful upgrade.
 - An upgrade's set (`snapshots/<runId>/`: the webapp and buildomatic archives, the full export, `upgrade.json`) follows its run and is pruned with it. Before an upgrade starts, `verify-target-package` refuses a run whose backups will not fit under the home (the trees to archive, an export estimate of the larger of 1 GB and the webapp tree, 512 MB headroom, plus the margin), and `full-export` re-checks its own need; the plan names the backup location, its free space and `--home`/`JRS_UPGRADE_HOME`; `init` prints the home and its free space; `doctor`'s `disk` item measures the home's volume as well as the installation's (field test 2, U3).
 - The run directories `runs/<runId>/` (bundle copies, staging, markers) follow the same rules: one goes only when its run has ended, started before the retention cut-off, and neither it nor the run it is a `<runId>-hf-<slug>` sub-run of is protected; a leftover `hotfix-verify-*` working directory goes by age; no other name under `runs/` is touched. Removed run directories are listed with the removed snapshots; the kept and protected counts stay snapshot counts (#53).
 
@@ -454,7 +458,7 @@ record ImportRequest(Path archive, boolean update, boolean skipUserUpdate, boole
 **Phase E — verify**
 13a. `CheckAnalyticsJndi` — 9.0.x targets only (issue #108): the deployed webapp's `META-INF/context.xml` must declare `jdbc/jasperserverSystemAnalytics` and `jdbc/jasperserverAuditAnalytics` "even if the feature is disabled" (release notes 9.0 p.15); read-only, a missing resource is a logged WARN naming the file, never a failure.
 14. `Smoke` (§12.2). Failure offers rollback to point B.
-15. `RecordUpgrade` — marks hotfixes `SUPERSEDED`/re-installed, records the upgrade snapshot set as retention-protected. `PointConfigAtTarget` then points `server.buildomaticDir` at the target's buildomatic and, with `--tomcat-dir`, `server.tomcatDir` at the new Tomcat.
+15. `RecordUpgrade` — records the upgrade snapshot set as retention-protected (it no longer marks hotfixes `SUPERSEDED`, ADR-0004). `PointConfigAtTarget` then points `server.buildomaticDir` at the target's buildomatic and, with `--tomcat-dir`, `server.tomcatDir` at the new Tomcat.
 
 **Rehearsal** (`jrs-upgrade upgrade … --test`; field test 2, U1). The vendor's own validation, run before anything is touched: phase A as above (`Doctor`, `VerifyTargetPackage`), then `WriteMasterProperties` and `StageKeystoreInit` exactly as the upgrade stages them, then `RunVendorTest` — `js-upgrade-<mode> test` when the package ships the wrapper (the vendor's `test` option runs `pre-upgrade-test-<ce|pro>`: it validates the properties, the database connection and the package and, by the vendor's own word, modifies no instance and no resource; with `test` the newdb wrapper takes no export file, buildomatic `bin/do-js-upgrade`), else `js-ant pre-upgrade-test-<ce|pro> -Dstrategy=<standard|inDatabase>` — then `UnstageTargetPackage`, which runs the two staging steps' compensations so the package is left as it was found. `RunVendorTest` is read-only; Ant's `BUILD FAILED` or the keystore banner fail it with the vendor's lines in the message. No stop, no backup, no export; the plan's operation is `upgrade.test`, its summary says so, and the samedb backup gate does not apply. A failed rehearsal exits **2**: nothing was mutated (the staged files are removed by the ordinary compensation), so 3 would claim a rollback of the server that never happened. The guided menu offers the rehearsal before the real run.
 

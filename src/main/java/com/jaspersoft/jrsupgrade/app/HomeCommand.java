@@ -36,9 +36,9 @@ import picocli.CommandLine.Spec;
  * every operator who reaches that home follows it; nothing here needs a configuration, a server or
  * the state store of the new home, so it works on a host that has run out of space; {@code set} and
  * {@code reset} refuse, unless {@code --force}, while the home being left still holds what a later
- * rollback or recovery needs (installed hotfixes, registered customizations, runs pending
- * recovery), because the state store records those by absolute path and they would stay behind; the
- * redirect file is replaced atomically where the file system allows it.
+ * rollback or recovery needs (registered customizations, runs pending recovery), because the state
+ * store records those by absolute path and they would stay behind; the redirect file is replaced
+ * atomically where the file system allows it.
  */
 @Command(
     name = "home",
@@ -165,8 +165,8 @@ final class HomeCommand implements Runnable {
     @Option(
         names = "--force",
         description =
-            "Move even though the current home still holds installed hotfixes, registered"
-                + " customizations or runs pending recovery (they stay behind).")
+            "Move even though the current home still holds registered customizations or runs"
+                + " pending recovery (they stay behind).")
     boolean force;
 
     @Override
@@ -219,8 +219,8 @@ final class HomeCommand implements Runnable {
             ExitCodes.PRECHECK_FAILED,
             w.home() + " still holds " + kept.get() + ", which would stay behind",
             Optional.of(
-                "roll back or finish them first (jrs-upgrade hotfix list, jrs-upgrade runs list), or pass"
-                    + " --force to move anyway; their snapshots stay in "
+                "unregister or finish them first (jrs-upgrade customizations list, jrs-upgrade"
+                    + " runs list), or pass --force to move anyway; their snapshots stay in "
                     + w.home()));
       }
       try {
@@ -268,8 +268,8 @@ final class HomeCommand implements Runnable {
     @Option(
         names = "--force",
         description =
-            "Go back even though the redirected home holds installed hotfixes, registered"
-                + " customizations or runs pending recovery (they stay behind).")
+            "Go back even though the redirected home holds registered customizations or runs"
+                + " pending recovery (they stay behind).")
     boolean force;
 
     @Override
@@ -339,9 +339,9 @@ final class HomeCommand implements Runnable {
   }
 
   /**
-   * What in {@code home} a later command would still need: installed hotfixes (their rollback),
-   * registered customizations (their snapshots) and runs pending recovery. Empty when the home has
-   * no state store, or none of those.
+   * What in {@code home} a later command would still need: registered customizations (their
+   * snapshots) and runs pending recovery. Hotfixes another tool recorded there are not looked at
+   * (ADR-0004). Empty when the home has no state store, or none of those.
    */
   static Optional<String> stranded(Path home) {
     JrsUpgradeHome h = new JrsUpgradeHome(home);
@@ -350,12 +350,8 @@ final class HomeCommand implements Runnable {
     }
     List<String> parts = new ArrayList<>();
     try (StateStore store = StateStore.open(h, Clock.systemUTC())) {
-      int hotfixes = store.installedHotfixes().size();
       int customizations = store.customizations().size();
       int pending = store.pendingRuns().size();
-      if (hotfixes > 0) {
-        parts.add(hotfixes + " installed hotfix(es)");
-      }
       if (customizations > 0) {
         parts.add(customizations + " registered customization(s)");
       }

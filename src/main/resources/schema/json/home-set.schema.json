@@ -10,6 +10,6 @@
     "previous": { "type": "string", "description": "The directory it used before." },
     "base": { "type": "string", "description": "The home the redirect file lives in." },
     "redirectFile": { "type": "string" },
-    "leftBehind": { "type": "boolean", "description": "True when --force left installed hotfixes, customizations or pending runs in the previous home." }
+    "leftBehind": { "type": "boolean", "description": "True when --force left registered customizations or pending runs in the previous home." }
   }
 }

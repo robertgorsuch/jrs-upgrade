@@ -11,8 +11,6 @@ import com.jaspersoft.jrsupgrade.core.engine.RunOutcome;
 import com.jaspersoft.jrsupgrade.core.platform.Trees;
 import com.jaspersoft.jrsupgrade.core.snapshot.Snapshot;
 import com.jaspersoft.jrsupgrade.core.snapshot.SnapshotStore;
-import com.jaspersoft.jrsupgrade.core.state.HotfixInstalled;
-import com.jaspersoft.jrsupgrade.core.state.HotfixState;
 import com.jaspersoft.jrsupgrade.core.state.SnapshotRecord;
 import com.jaspersoft.jrsupgrade.ops.upgrade.UpgradeOperations.RollbackOptions;
 import com.jaspersoft.jrsupgrade.ops.upgrade.UpgradeOperations.RollbackPoint;
@@ -205,17 +203,6 @@ class UpgradeRunTest {
   @Test
   void should_back_up_upgrade_and_record_when_vendor_script_succeeds() throws Exception {
     try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
-      f.store()
-          .recordHotfixInstalled(
-              new HotfixInstalled(
-                  "JRS-8.2.0-HF-0001",
-                  "1",
-                  "old fix",
-                  "r-old",
-                  Optional.empty(),
-                  HotfixState.INSTALLED,
-                  Instant.EPOCH),
-              List.of());
       String oldWebappHash = f.sha(f.webappDir.resolve("scripts").resolve("app.js"));
       Plan plan = f.ops().planUpgrade(newdb(f));
 

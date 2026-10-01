@@ -4,14 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jaspersoft.jrsupgrade.core.engine.TerminalState;
 import com.jaspersoft.jrsupgrade.core.state.Customization;
-import com.jaspersoft.jrsupgrade.core.state.HotfixInstalled;
-import com.jaspersoft.jrsupgrade.core.state.HotfixState;
 import com.jaspersoft.jrsupgrade.core.state.StateStore;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,13 +33,6 @@ class RetentionProtectionTest {
     store.close();
   }
 
-  private void hotfix(String id, String runId, HotfixState state) {
-    store.recordHotfixInstalled(
-        new HotfixInstalled(
-            id, "1", "title " + id, runId, Optional.of(runId + "/snapshot"), state, T0),
-        List.of());
-  }
-
   private void run(String runId, String operation, Instant started, Optional<TerminalState> end) {
     store.recordRunStart(runId, operation, Optional.empty(), started);
     end.ifPresent(s -> store.recordRunEnd(runId, started.plusSeconds(60), s, 0));
@@ -53,16 +43,23 @@ class RetentionProtectionTest {
     assertThat(RetentionProtection.compute(store).runIds()).isEmpty();
   }
 
+  /**
+   * ADR-0004: a run another tool journaled in a shared home (jrsctl's hotfix runs) is never pruned,
+   * whatever its outcome; jrs-upgrade's own finished runs are not protected for being runs.
+   */
   @Test
-  void should_protect_installing_run_when_hotfix_is_installed_but_not_when_rolled_back() {
-    hotfix("HF-1", "r-hf1", HotfixState.INSTALLED);
-    hotfix("HF-2", "r-hf2", HotfixState.ROLLED_BACK);
-    hotfix("HF-3", "r-hf3", HotfixState.SUPERSEDED);
+  void should_protect_every_run_another_tool_journaled_and_none_of_its_own() {
+    run("r-hf", "hotfix.apply", T0, Optional.of(TerminalState.SUCCEEDED));
+    run("r-hf-rb", "hotfix.rollback", T0.plusSeconds(60), Optional.of(TerminalState.FAILED));
+    run("r-exp", "export", T0.plusSeconds(120), Optional.of(TerminalState.SUCCEEDED));
+    run("r-imp", "import", T0.plusSeconds(180), Optional.of(TerminalState.SUCCEEDED));
+    run("r-smoke", "smoke --mutating", T0.plusSeconds(240), Optional.of(TerminalState.SUCCEEDED));
+    run("r-test", "upgrade.test", T0.plusSeconds(300), Optional.of(TerminalState.SUCCEEDED));
 
     RetentionProtection.Protected p = RetentionProtection.compute(store);
 
-    assertThat(p.runIds()).containsExactly("r-hf1");
-    assertThat(p.reasons().get("r-hf1")).contains("installed hotfix HF-1");
+    assertThat(p.runIds()).containsExactlyInAnyOrder("r-hf", "r-hf-rb");
+    assertThat(p.reasons().get("r-hf")).contains("hotfix.apply").contains("another tool");
   }
 
   @Test
@@ -85,7 +82,7 @@ class RetentionProtectionTest {
     run("r-up1", "upgrade", T0, Optional.of(TerminalState.SUCCEEDED));
     run("r-up2", "upgrade", T0.plusSeconds(3600), Optional.of(TerminalState.SUCCEEDED));
     run("r-up3", "upgrade", T0.plusSeconds(7200), Optional.of(TerminalState.FAILED));
-    run("r-hf", "hotfix.apply", T0.plusSeconds(10_800), Optional.of(TerminalState.SUCCEEDED));
+    run("r-exp", "export", T0.plusSeconds(10_800), Optional.of(TerminalState.SUCCEEDED));
 
     RetentionProtection.Protected p = RetentionProtection.compute(store);
 
@@ -97,8 +94,8 @@ class RetentionProtectionTest {
 
   @Test
   void should_protect_pending_runs_when_recovery_is_outstanding() {
-    run("r-pending", "hotfix.apply", T0, Optional.empty());
-    run("r-done", "hotfix.apply", T0.plusSeconds(60), Optional.of(TerminalState.SUCCEEDED));
+    run("r-pending", "import", T0, Optional.empty());
+    run("r-done", "import", T0.plusSeconds(60), Optional.of(TerminalState.SUCCEEDED));
 
     RetentionProtection.Protected p = RetentionProtection.compute(store);
 
