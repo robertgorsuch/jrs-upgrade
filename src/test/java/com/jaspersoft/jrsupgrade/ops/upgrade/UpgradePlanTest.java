@@ -109,6 +109,7 @@ class UpgradePlanTest {
               "full-export",
               "dump-foreign-schema",
               "run-vendor-upgrade",
+              "check-adhoc-templates",
               "clear-tomcat-caches",
               "clear-repository-cache",
               "start-service",

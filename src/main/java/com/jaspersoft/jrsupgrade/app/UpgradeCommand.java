@@ -84,6 +84,15 @@ final class UpgradeCommand implements Callable<Integer> {
   Path customDdl;
 
   @Option(
+      names = "--restore-vendor-templates",
+      description =
+          "newdb from before 9.0 to 9.0 or later: after the vendor run, put back the vendor's Ad"
+              + " Hoc templates the import of the older export overwrote, with js-ant"
+              + " import-minimal-pro (upgrade guide 10.1 p.92). It imports the vendor's whole"
+              + " minimal catalog; never implied by --yes.")
+  boolean restoreVendorTemplates;
+
+  @Option(
       names = "--mode",
       paramLabel = "newdb|samedb",
       defaultValue = "newdb",
@@ -216,7 +225,8 @@ final class UpgradeCommand implements Callable<Integer> {
               migratePasswords,
               Optional.ofNullable(war),
               packageDirs.subList(1, packageDirs.size()),
-              Optional.ofNullable(customDdl));
+              Optional.ofNullable(customDdl),
+              restoreVendorTemplates);
       Plan planned;
       try {
         DefaultUpgradeOperations ops = new DefaultUpgradeOperations(services);

@@ -243,7 +243,11 @@ final class HelpExamples {
             new Example(
                 "Deploy the vendor's patched WAR; re-create the customer tables newdb drops",
                 "jrs-upgrade upgrade --to 10.1.0 --package /opt/dist/jasperreports-server-pro-10.1.0-bin"
-                    + " --war /opt/dist/jasperserver-pro-10.1.0-hf.war --custom-ddl /opt/ngra/ddl")));
+                    + " --war /opt/dist/jasperserver-pro-10.1.0-hf.war --custom-ddl /opt/ngra/ddl"),
+            new Example(
+                "From 8.2: put back the vendor's Ad Hoc templates the old export overwrites",
+                "jrs-upgrade upgrade --to 9.0.0 --package /opt/dist/jasperreports-server-pro-9.0.0-bin"
+                    + " --restore-vendor-templates")));
     m.put(
         "upgrade rollback",
         List.of(

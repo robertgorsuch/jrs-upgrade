@@ -701,6 +701,33 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
               options.customDdl().isPresent())
           .ifPresent(warnings::add);
     }
+    boolean templates =
+        firstMode == Mode.NEWDB
+            && TemplateSteps.applies(
+                identity.map(ServerIdentity::version),
+                prepared.hops().get(0).options().toVersion());
+    if (options.restoreVendorTemplates() && !templates) {
+      throw new UpgradeException(
+          UpgradeException.USAGE,
+          "--restore-vendor-templates puts back the Ad Hoc templates a newdb import of a pre-9.0"
+              + " export overwrote; this upgrade has no such import",
+          "leave --restore-vendor-templates out");
+    }
+    if (templates) {
+      // issue #10: the pre-9.0 export carries /public/templates under the vendor's 9.0 names
+      warnings.add(
+          "the export from before 9.0 carries /public/templates, whose names the vendor's Ad Hoc"
+              + " Component templates use since 9.0: js-upgrade-newdb imports it over them, and "
+              + TemplateSteps.CHECK_ADHOC_TEMPLATES
+              + " names the ones it overwrote"
+              + (options.restoreVendorTemplates()
+                  ? "; "
+                      + TemplateSteps.RESTORE_VENDOR_TEMPLATES
+                      + " then runs js-ant import-minimal, which imports the vendor's whole minimal"
+                      + " catalog (upgrade guide 10.1 p.92)"
+                  : "; --restore-vendor-templates puts them back with js-ant import-minimal"
+                      + " (upgrade guide 10.1 p.92)"));
+    }
     if (options.migratePasswords()) {
       // installation guide 10.1 pp.194-199 (issue #108): the migration utility ships with 10.1
       if (!VendorPreconditions.atLeast(
@@ -780,6 +807,14 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
         options
             .customDdl()
             .ifPresent(dir -> steps.add(new CustomObjectSteps.ApplyCustomDdl(rt, hop, dir)));
+        if (templates) {
+          // issue #10: which vendor Ad Hoc templates the import of the old export overwrote, and,
+          // when asked, the vendor's own put back before any later hop and before the start
+          steps.add(new TemplateSteps.CheckAdhocTemplates(rt, hop));
+          if (options.restoreVendorTemplates()) {
+            steps.add(new TemplateSteps.RestoreVendorTemplates(rt, hop));
+          }
+        }
       }
     }
     if (lastMode == Mode.SAMEDB && options.migratePasswords()) {
@@ -894,6 +929,7 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
     inputs.put("to", options.toVersion());
     inputs.put("mode", prepared.firstMode().name());
     options.customDdl().ifPresent(d -> inputs.put("customDdl", d.toString()));
+    inputs.put("restoreVendorTemplates", Boolean.toString(options.restoreVendorTemplates()));
     if (prepared.route()) {
       inputs.put("route", title(prepared, identity));
       for (UpgradeInput hop : prepared.hops()) {

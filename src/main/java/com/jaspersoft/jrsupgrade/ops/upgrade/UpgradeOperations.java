@@ -78,7 +78,9 @@ public interface UpgradeOperations {
    * {@code transitPackages} are the unpacked packages of the intermediate versions of a multi-hop
    * route (issue #1), in any order, matched to the hops by the version each states; {@code
    * customDdl} is a directory of SQL scripts re-applied after a newdb hop rebuilt the database
-   * (issue #3).
+   * (issue #3); {@code restoreVendorTemplates} asks a newdb hop to 9.0 or later from an older
+   * version to run the vendor's import-minimal afterwards, putting back the Ad Hoc templates the
+   * import overwrote (issue #10).
    */
   record UpgradeOptions(
       String toVersion,
@@ -93,7 +95,8 @@ public interface UpgradeOperations {
       boolean migratePasswords,
       Optional<Path> war,
       List<Path> transitPackages,
-      Optional<Path> customDdl) {
+      Optional<Path> customDdl,
+      boolean restoreVendorTemplates) {
     public UpgradeOptions {
       Objects.requireNonNull(toVersion, "toVersion");
       Objects.requireNonNull(packageDir, "packageDir");
@@ -140,7 +143,8 @@ public interface UpgradeOperations {
           migratePasswords,
           Optional.empty(),
           List.of(),
-          Optional.empty());
+          Optional.empty(),
+          false);
     }
 
     /** The options with the events and the passwords left where the vendor script leaves them. */
@@ -227,7 +231,8 @@ public interface UpgradeOperations {
           migrate,
           war,
           transitPackages,
-          customDdl);
+          customDdl,
+          restoreVendorTemplates);
     }
 
     public UpgradeOptions withIncludeEvents(boolean include) {
@@ -244,7 +249,8 @@ public interface UpgradeOperations {
           migratePasswords,
           war,
           transitPackages,
-          customDdl);
+          customDdl,
+          restoreVendorTemplates);
     }
 
     public UpgradeOptions withExistingExport(Path export) {
@@ -261,7 +267,8 @@ public interface UpgradeOperations {
           migratePasswords,
           war,
           transitPackages,
-          customDdl);
+          customDdl,
+          restoreVendorTemplates);
     }
 
     public UpgradeOptions withKeyAlias(String alias) {
@@ -278,7 +285,8 @@ public interface UpgradeOperations {
           migratePasswords,
           war,
           transitPackages,
-          customDdl);
+          customDdl,
+          restoreVendorTemplates);
     }
 
     public UpgradeOptions withKeyPassword(SecretRef ref) {
@@ -295,7 +303,8 @@ public interface UpgradeOperations {
           migratePasswords,
           war,
           transitPackages,
-          customDdl);
+          customDdl,
+          restoreVendorTemplates);
     }
 
     /** The options with {@code patched} deployed instead of the package's own webapp (issue #9). */
@@ -313,7 +322,8 @@ public interface UpgradeOperations {
           migratePasswords,
           Optional.of(patched),
           transitPackages,
-          customDdl);
+          customDdl,
+          restoreVendorTemplates);
     }
 
     /** The options with the packages of a route's intermediate versions (issue #1). */
@@ -331,7 +341,8 @@ public interface UpgradeOperations {
           migratePasswords,
           war,
           packages,
-          customDdl);
+          customDdl,
+          restoreVendorTemplates);
     }
 
     /** The options with SQL scripts re-applied after a newdb hop (issue #3). */
@@ -349,7 +360,27 @@ public interface UpgradeOperations {
           migratePasswords,
           war,
           transitPackages,
-          Optional.of(dir));
+          Optional.of(dir),
+          restoreVendorTemplates);
+    }
+
+    /** The options with the vendor's Ad Hoc templates put back after a newdb hop (issue #10). */
+    public UpgradeOptions withRestoreVendorTemplates(boolean restore) {
+      return new UpgradeOptions(
+          toVersion,
+          packageDir,
+          mode,
+          dbBackupConfirmed,
+          tomcatDir,
+          existingExport,
+          keyAlias,
+          keyPassword,
+          includeEvents,
+          migratePasswords,
+          war,
+          transitPackages,
+          customDdl,
+          restore);
     }
 
     /**
@@ -370,7 +401,8 @@ public interface UpgradeOperations {
           migratePasswords,
           war,
           transitPackages,
-          customDdl);
+          customDdl,
+          restoreVendorTemplates);
     }
 
     public static UpgradeOptions newdb(String toVersion, Path packageDir) {
