@@ -129,7 +129,8 @@ public final class DefaultCustomizationOperations implements CustomizationOperat
   }
 
   @Override
-  public Findings assess(Scan scan, Path target, Optional<String> targetVersion) {
+  public Findings assess(
+      Scan scan, Path target, Optional<String> targetVersion, Optional<Path> mergeDir) {
     Objects.requireNonNull(scan, "scan");
     Objects.requireNonNull(target, "target");
     Path targetWebapp = WebappScanner.vendorWebapp(target, webappName());
@@ -170,13 +171,51 @@ public final class DefaultCustomizationOperations implements CustomizationOperat
         }
       }
       VendorClassCheck.Result classes = VendorClassCheck.check(code, index, to);
+      List<RelocationFinding> relocations = new ArrayList<>();
+      java.util.Set<String> mergeable = new java.util.TreeSet<>();
+      for (ScanEntry e : scan.entries()) {
+        String rel = e.relativePath();
+        if ((e.change() != Change.ADDED && e.change() != Change.CHANGED)
+            || e.installed().isEmpty()
+            || PackageIndex.isLibJar(rel)
+            || rel.endsWith(".class")) {
+          continue;
+        }
+        for (UpgradeRules.Relocation r : rules.relocations(source, to)) {
+          if (r.matches(rel)) {
+            relocations.add(new RelocationFinding(rel, r.id(), r.kind().name(), r.describe()));
+          }
+        }
+        // the scripts/ overlay is rebuilt, not merged (issue #117); an added file the target does
+        // not ship has nothing to merge with
+        if (!rel.startsWith(SCRIPTS_PREFIX)
+            && (e.change() == Change.CHANGED || index.files().contains(rel))) {
+          mergeable.add(rel);
+        }
+      }
+      Map<String, byte[]> base = PackageIndex.readAll(scan.vendorWebapp(), mergeable);
+      Map<String, byte[]> theirs = PackageIndex.readAll(targetWebapp, mergeable);
+      List<MergeFinding> merges = new ArrayList<>();
+      for (ScanEntry e : scan.entries()) {
+        if (mergeable.contains(e.relativePath())) {
+          merges.add(
+              MergeInputs.merge(
+                  e.relativePath(),
+                  base.getOrDefault(e.relativePath(), new byte[0]),
+                  Files.readAllBytes(e.installed().orElseThrow()),
+                  Optional.ofNullable(theirs.get(e.relativePath())),
+                  mergeDir));
+        }
+      }
       return new Findings(
           targetWebapp,
           source,
           to,
           JarRetirement.judge(jars, index, rules.jarRules(source, to)),
           classes.classes(),
-          classes.jakarta());
+          classes.jakarta(),
+          relocations,
+          merges);
     } catch (IOException e) {
       throw new CustomizationException(
           "cannot read the target " + targetWebapp + ": " + e.getMessage(),

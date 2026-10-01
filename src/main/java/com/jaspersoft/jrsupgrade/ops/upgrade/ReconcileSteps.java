@@ -1,5 +1,6 @@
 package com.jaspersoft.jrsupgrade.ops.upgrade;
 
+import com.jaspersoft.jrsupgrade.core.compat.UpgradeRules;
 import com.jaspersoft.jrsupgrade.core.engine.CheckResult;
 import com.jaspersoft.jrsupgrade.core.engine.Context;
 import com.jaspersoft.jrsupgrade.core.engine.Step;
@@ -126,6 +127,7 @@ final class ReconcileSteps {
                   + file
                   + ": absent after the upgrade; customized copy at "
                   + customized);
+          relocationHints(ctx, out, file);
           conflicts++;
           continue;
         }
@@ -161,6 +163,7 @@ final class ReconcileSteps {
                 + current
                 + "); customized copy at "
                 + customized);
+        relocationHints(ctx, out, file);
         try {
           for (String line :
               DefaultCustomizationOperations.diffLines(
@@ -214,6 +217,27 @@ final class ReconcileSteps {
               + conflicts
               + " conflict(s) left for the operator");
       return StepResult.ok();
+    }
+
+    /**
+     * Issue #6: when the matrix says the file or its setting moved between the two versions, the
+     * conflict says where it went rather than leaving a bare diff to explain it.
+     */
+    private void relocationHints(Context ctx, EventSink out, Path file) {
+      Path webapp = in.webappDir().toAbsolutePath().normalize();
+      if (!file.startsWith(webapp) || in.currentVersion().isEmpty()) {
+        return;
+      }
+      String rel = webapp.relativize(file).toString().replace('\\', '/');
+      for (UpgradeRules.Relocation r :
+          rt.services()
+              .matrix()
+              .rules()
+              .relocations(in.currentVersion().get(), in.options().toVersion())) {
+        if (r.matches(rel)) {
+          Logs.warn(rt, ctx, out, this, "  " + rel + " " + r.describe());
+        }
+      }
     }
 
     private void copyOver(Path source, Path target) throws IOException {

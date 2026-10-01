@@ -126,6 +126,36 @@ record PackageIndex(Path webapp, Set<String> files, List<Jar> jars, Map<String, 
     return Optional.empty();
   }
 
+  /**
+   * The bytes of each of {@code relativePaths} that {@code webapp} (a directory or a WAR) holds, in
+   * one pass over a WAR; paths it does not hold are absent from the result.
+   */
+  static Map<String, byte[]> readAll(Path webapp, Set<String> relativePaths) throws IOException {
+    Map<String, byte[]> out = new HashMap<>();
+    if (relativePaths.isEmpty()) {
+      return out;
+    }
+    if (Files.isDirectory(webapp)) {
+      for (String rel : relativePaths) {
+        Path p = webapp.resolve(rel);
+        if (Files.isRegularFile(p)) {
+          out.put(rel, Files.readAllBytes(p));
+        }
+      }
+      return out;
+    }
+    try (InputStream in = Files.newInputStream(webapp);
+        ZipInputStream war = new ZipInputStream(in)) {
+      ZipEntry e;
+      while ((e = war.getNextEntry()) != null && out.size() < relativePaths.size()) {
+        if (relativePaths.contains(e.getName())) {
+          out.put(e.getName(), war.readAllBytes());
+        }
+      }
+    }
+    return out;
+  }
+
   /** The jar of {@code WEB-INF/lib} with this file name. */
   Optional<Jar> jar(String name) {
     return jars.stream().filter(j -> j.name().equals(name)).findFirst();

@@ -25,10 +25,25 @@ public final class CustomizationFindings {
    */
   public static List<String> forPlan(
       List<Customization> registered,
+      Path installedWebapp,
       Optional<Path> targetWebapp,
       String source,
       String target,
       UpgradeRules rules) {
+    List<String> out = new ArrayList<>();
+    Path webapp = installedWebapp.toAbsolutePath().normalize();
+    for (Customization c : registered) {
+      Path file = c.path().toAbsolutePath().normalize();
+      if (!file.startsWith(webapp)) {
+        continue;
+      }
+      String rel = webapp.relativize(file).toString().replace('\\', '/');
+      for (UpgradeRules.Relocation r : rules.relocations(source, target)) {
+        if (r.matches(rel)) {
+          out.add("customization " + rel + ": " + r.describe() + " (issue #6)");
+        }
+      }
+    }
     List<Path> jars = new ArrayList<>();
     for (Customization c : registered) {
       String path = c.path().toString().replace('\\', '/');
@@ -38,7 +53,6 @@ public final class CustomizationFindings {
         jars.add(c.path());
       }
     }
-    List<String> out = new ArrayList<>();
     if (jars.isEmpty() || targetWebapp.isEmpty()) {
       return out;
     }

@@ -202,6 +202,37 @@ public interface CustomizationOperations {
     }
   }
 
+  /** A changed or added file whose setting moved in the target (issue #6). */
+  record RelocationFinding(String path, String rule, String kind, String description) {
+    public RelocationFinding {
+      Objects.requireNonNull(path, "path");
+      Objects.requireNonNull(rule, "rule");
+      Objects.requireNonNull(kind, "kind");
+      Objects.requireNonNull(description, "description");
+    }
+  }
+
+  /** How the three-way merge of a customized file came out (issue #6). */
+  enum MergeStatus {
+    /** Both sides' changes applied without overlap. */
+    CLEAN,
+    /** Both sides changed the same lines; the merged file holds conflict markers. */
+    CONFLICT,
+    /** Not text; not merged. */
+    BINARY,
+    /** The target has no file at this path; see the relocations. */
+    NOT_IN_TARGET
+  }
+
+  /** One customized file merged three ways; {@code merged} is where the result was written. */
+  record MergeFinding(String path, MergeStatus status, int conflicts, Optional<String> merged) {
+    public MergeFinding {
+      Objects.requireNonNull(path, "path");
+      Objects.requireNonNull(status, "status");
+      Objects.requireNonNull(merged, "merged");
+    }
+  }
+
   /**
    * What becomes of a scan's changed and added files on the target version (ADR-0003): {@code
    * sourceVersion} is the running version, {@code targetVersion} the target's.
@@ -212,7 +243,9 @@ public interface CustomizationOperations {
       String targetVersion,
       List<JarFinding> jars,
       List<ClassFinding> classes,
-      List<JakartaFinding> jakarta) {
+      List<JakartaFinding> jakarta,
+      List<RelocationFinding> relocations,
+      List<MergeFinding> merges) {
     public Findings {
       Objects.requireNonNull(targetWebapp, "targetWebapp");
       Objects.requireNonNull(sourceVersion, "sourceVersion");
@@ -220,15 +253,23 @@ public interface CustomizationOperations {
       jars = List.copyOf(jars);
       classes = List.copyOf(classes);
       jakarta = List.copyOf(jakarta);
+      relocations = List.copyOf(relocations);
+      merges = List.copyOf(merges);
     }
   }
 
   /**
    * Judges {@code scan}'s changed and added files against the target distribution {@code target}
-   * (its unpacked directory, webapp directory or WAR) with the matrix's rules; read-only. {@code
+   * (its unpacked directory, webapp directory or WAR) with the matrix's rules. {@code
    * targetVersion} overrides the version the target states, and is required when it states none.
+   * Nothing is written, except the three-way merge files under {@code mergeDir} when it is given.
    */
-  Findings assess(Scan scan, Path target, Optional<String> targetVersion);
+  Findings assess(Scan scan, Path target, Optional<String> targetVersion, Optional<Path> mergeDir);
+
+  /** {@link #assess(Scan, Path, Optional, Optional)} writing nothing. */
+  default Findings assess(Scan scan, Path target, Optional<String> targetVersion) {
+    return assess(scan, target, targetVersion, Optional.empty());
+  }
 
   /**
    * Registers every {@link Change#CHANGED} and {@link Change#ADDED} file of {@code scan} that is

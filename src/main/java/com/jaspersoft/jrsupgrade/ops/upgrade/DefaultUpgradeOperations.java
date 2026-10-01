@@ -611,6 +611,7 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
             warnings.addAll(
                 CustomizationFindings.forPlan(
                     rt.store().customizations(),
+                    in.webappDir(),
                     targetWebapp,
                     id.version(),
                     options.toVersion(),

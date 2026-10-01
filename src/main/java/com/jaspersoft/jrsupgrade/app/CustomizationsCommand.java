@@ -317,6 +317,16 @@ final class CustomizationsCommand implements Runnable {
         description = "The target's version, when --target does not state it.")
     String to;
 
+    @picocli.CommandLine.Option(
+        names = "--merge-dir",
+        paramLabel = "<dir>",
+        description =
+            "With --target: write a three-way merge of each changed file the target also ships"
+                + " under <dir>, at its path in the webapp: .base (the running version's vendor"
+                + " file), .mine (yours), .theirs (the target's), .merged and .patch (theirs to"
+                + " merged).")
+    Path mergeDir;
+
     @Override
     public Integer call() {
       PrintWriter out = spec.commandLine().getOut();
@@ -333,7 +343,10 @@ final class CustomizationsCommand implements Runnable {
             tomcatFiles = ops.scanTomcat();
           }
           if (target != null) {
-            findings = Optional.of(ops.assess(scan, target, Optional.ofNullable(to)));
+            findings =
+                Optional.of(
+                    ops.assess(
+                        scan, target, Optional.ofNullable(to), Optional.ofNullable(mergeDir)));
           }
         } catch (CustomizationException e) {
           return refused(out, err, global.json(), e);
@@ -477,6 +490,29 @@ final class CustomizationsCommand implements Runnable {
         }
         table.lines().forEach(l -> out.println(redactor.redact("  " + l)));
       }
+      out.println("files and settings that moved in the target (issue #6):");
+      if (f.relocations().isEmpty()) {
+        out.println("  none");
+      }
+      for (CustomizationOperations.RelocationFinding r : f.relocations()) {
+        out.println(redactor.redact("  " + r.path() + ": " + r.description()));
+      }
+      out.println("three-way merges of the changed files (issue #6):");
+      if (f.merges().isEmpty()) {
+        out.println("  none");
+      } else {
+        TextTable table = new TextTable().row("MERGE", "PATH", "RESULT");
+        for (CustomizationOperations.MergeFinding m : f.merges()) {
+          table.row(
+              m.status().name()
+                  + (m.status() == CustomizationOperations.MergeStatus.CONFLICT
+                      ? " (" + m.conflicts() + ")"
+                      : ""),
+              m.path(),
+              m.merged().orElse("(pass --merge-dir to write it)"));
+        }
+        table.lines().forEach(l -> out.println(redactor.redact("  " + l)));
+      }
       for (CustomizationOperations.JakartaFinding j : f.jakarta()) {
         out.println(
             redactor.redact(
@@ -522,6 +558,26 @@ final class CustomizationsCommand implements Runnable {
         jakarta.add(row);
       }
       tree.put("jakarta", jakarta);
+      List<Map<String, Object>> relocations = new ArrayList<>();
+      for (CustomizationOperations.RelocationFinding r : f.relocations()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("path", r.path());
+        row.put("rule", r.rule());
+        row.put("kind", r.kind());
+        row.put("description", r.description());
+        relocations.add(row);
+      }
+      tree.put("relocations", relocations);
+      List<Map<String, Object>> merges = new ArrayList<>();
+      for (CustomizationOperations.MergeFinding m : f.merges()) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("path", m.path());
+        row.put("status", m.status().name());
+        row.put("conflicts", m.conflicts());
+        m.merged().ifPresent(p -> row.put("merged", p));
+        merges.add(row);
+      }
+      tree.put("merges", merges);
       return tree;
     }
 

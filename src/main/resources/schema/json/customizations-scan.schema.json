@@ -39,7 +39,7 @@
       "type": "object",
       "description": "Present with --target: what becomes of the changed and added files on the target version (ADR-0003).",
       "additionalProperties": false,
-      "required": ["targetWebapp", "sourceVersion", "targetVersion", "jars", "classes", "jakarta"],
+      "required": ["targetWebapp", "sourceVersion", "targetVersion", "jars", "classes", "jakarta", "relocations", "merges"],
       "properties": {
         "targetWebapp": { "type": "string" },
         "sourceVersion": { "type": "string" },
@@ -86,6 +86,36 @@
             "properties": {
               "jar": { "type": "string" },
               "javaxReferences": { "type": "object", "additionalProperties": { "type": "integer" } }
+            }
+          }
+        },
+        "relocations": {
+          "type": "array",
+          "description": "Issue #6: changed and added files whose setting moved in the target, from the matrix's relocations.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "rule", "kind", "description"],
+            "properties": {
+              "path": { "type": "string" },
+              "rule": { "type": "string" },
+              "kind": { "enum": ["REMOVED", "MOVED", "MECHANISM"] },
+              "description": { "type": "string", "description": "Where the setting went, and the source of the rule." }
+            }
+          }
+        },
+        "merges": {
+          "type": "array",
+          "description": "Issue #6: the three-way merge of each changed file the target also ships.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "status", "conflicts"],
+            "properties": {
+              "path": { "type": "string" },
+              "status": { "enum": ["CLEAN", "CONFLICT", "BINARY", "NOT_IN_TARGET"] },
+              "conflicts": { "type": "integer" },
+              "merged": { "type": "string", "description": "The merged file, with --merge-dir." }
             }
           }
         }
