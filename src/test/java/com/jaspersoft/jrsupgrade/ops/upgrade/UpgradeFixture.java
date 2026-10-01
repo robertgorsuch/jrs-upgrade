@@ -210,6 +210,55 @@ public final class UpgradeFixture implements AutoCloseable {
     write(packageDir.resolve(CREATE_KEYSTORE), "");
   }
 
+  /**
+   * Turns the package into the shape a bin zip has: the webapp as {@code jasperserver-pro.war} at
+   * the top, no exploded directory (issue #9: the only shape {@code --war} accepts).
+   */
+  public Path usePackagedWar() throws IOException {
+    Path exploded = packageDir.resolve("jasperserver-pro");
+    try (var walk = Files.walk(exploded)) {
+      for (Path p : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+        Files.delete(p);
+      }
+    }
+    return war(packageDir.resolve("jasperserver-pro.war"), Optional.empty(), NEW_VERSION);
+  }
+
+  /**
+   * A patched WAR outside the package whose {@code WEB-INF/lib} holds one vendor jar per version in
+   * {@code jarVersions}, with {@code build} as its manifest's Implementation-Version.
+   */
+  public Path patchedWar(String name, Optional<String> build, String... jarVersions)
+      throws IOException {
+    return war(Files.createDirectories(root.resolve("wars")).resolve(name), build, jarVersions);
+  }
+
+  private static Path war(Path file, Optional<String> build, String... jarVersions)
+      throws IOException {
+    try (java.io.OutputStream out = Files.newOutputStream(file);
+        java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(out)) {
+      zos.putNextEntry(new java.util.zip.ZipEntry("META-INF/MANIFEST.MF"));
+      zos.write(
+          ("Manifest-Version: 1.0\r\n"
+                  + build.map(b -> "Implementation-Version: " + b + "\r\n").orElse("")
+                  + "\r\n")
+              .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      zos.closeEntry();
+      zos.putNextEntry(new java.util.zip.ZipEntry("WEB-INF/web.xml"));
+      zos.write("<web-app/>".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      zos.closeEntry();
+      int i = 0;
+      for (String v : jarVersions) {
+        zos.putNextEntry(
+            new java.util.zip.ZipEntry(
+                "WEB-INF/lib/jasperserver-api-impl" + i++ + "-" + v + ".jar"));
+        zos.write(v.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        zos.closeEntry();
+      }
+    }
+    return file;
+  }
+
   /** A JasperReports Server export archive (index.xml plus a resource) outside the home. */
   public Path fakeExport(String name) throws IOException {
     Path zip = Files.createDirectories(root.resolve("exports")).resolve(name);

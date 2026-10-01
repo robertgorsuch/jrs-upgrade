@@ -436,6 +436,30 @@ class UpgradeStepIdempotencyTest {
     }
   }
 
+  /** Issue #9: the patched WAR is staged once; the package's own WAR is set aside once. */
+  @Test
+  void should_stage_the_patched_war_once_when_stage_patched_war_executes_twice() throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
+      Path own = f.usePackagedWar();
+      Path war = f.patchedWar("patched.war", Optional.empty(), UpgradeFixture.NEW_VERSION);
+      assertReexecutionConverges(
+          f, f.ops().planUpgrade(newdb(f).withWar(war)), "r-war", "stage-patched-war");
+      assertThat(f.sha(own)).isEqualTo(f.sha(war));
+    }
+  }
+
+  @Test
+  void should_converge_when_stage_patched_war_compensates_twice() throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
+      Path own = f.usePackagedWar();
+      String ownSha = f.sha(own);
+      Path war = f.patchedWar("patched.war", Optional.empty(), UpgradeFixture.NEW_VERSION);
+      assertCompensationConverges(
+          f, f.ops().planUpgrade(newdb(f).withWar(war)), "r-war-c", "stage-patched-war");
+      assertThat(f.sha(own)).isEqualTo(ownSha);
+    }
+  }
+
   /**
    * Review §1.4: buildomatic finds the keystore through {@code keystore.init.properties}; a fresh
    * target package has none, and the vendor scripts then create a new keystore (setup.xml {@code

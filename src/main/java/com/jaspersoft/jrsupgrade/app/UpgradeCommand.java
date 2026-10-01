@@ -66,6 +66,15 @@ final class UpgradeCommand implements Callable<Integer> {
   List<Path> packageDirs;
 
   @Option(
+      names = "--war",
+      paramLabel = "<file>",
+      description =
+          "A patched WAR (e.g. the vendor's pre-patched build) to deploy instead of the package's"
+              + " own webapp; the package's buildomatic still runs the upgrade, and the run records"
+              + " both checksums.")
+  Path war;
+
+  @Option(
       names = "--mode",
       paramLabel = "newdb|samedb",
       defaultValue = "newdb",
@@ -196,6 +205,7 @@ final class UpgradeCommand implements Callable<Integer> {
               keyPassword,
               includeEvents,
               migratePasswords,
+              Optional.ofNullable(war),
               packageDirs.subList(1, packageDirs.size()));
       Plan planned;
       try {

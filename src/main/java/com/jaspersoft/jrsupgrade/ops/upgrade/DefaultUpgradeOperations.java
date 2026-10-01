@@ -292,6 +292,7 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
       List<UpgradeInput> hops,
       TargetPackage target,
       Optional<ServerIdentity> identity,
+      Optional<PatchedWar> war,
       List<String> warnings) {
 
     boolean route() {
@@ -444,8 +445,8 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
   /**
    * The preflight every upgrade plan shares: the option consistency, the upgrade path or route in
    * the matrix, the packages of its hops, the installed buildomatic, the staged properties'
-   * invariants and the Tomcat; it throws for what cannot be planned and collects the warnings for
-   * what can.
+   * invariants, the Tomcat, the patched WAR and the hotfix labels; it throws for what cannot be
+   * planned and collects the warnings for what can.
    */
   private Prepared prepare(UpgradeOptions options) {
     Objects.requireNonNull(options, "options");
@@ -593,12 +594,62 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
                 + " will refuse)");
       }
     }
-    return new Prepared(in, List.copyOf(hops), target, identity, warnings);
+    Optional<PatchedWar> war = options.war().map(w -> patchedWar(w, in, warnings));
+    // issue #9: hotfix labels the product never reached, named next to the version that runs
+    identity.ifPresent(
+        id ->
+            warnings.addAll(
+                HotfixLabels.mismatches(
+                    in.webappDir(), id.version(), rt.store().installedHotfixes())));
+    return new Prepared(in, List.copyOf(hops), target, identity, war, warnings);
   }
 
   /** ADR-0002: the scratch Tomcat directory a transit hop's buildomatic is pointed at. */
   private Path transitAppServer(String version) {
     return rt.home().root().resolve("transit").resolve(version).resolve("tomcat");
+  }
+
+  /**
+   * Issue #9: the patched WAR, read and checked against the final package; refuses a WAR that names
+   * another version and a package whose exploded webapp buildomatic could deploy instead.
+   */
+  private PatchedWar patchedWar(Path file, UpgradeInput in, List<String> warnings) {
+    PatchedWar war = PatchedWar.read(file, rt.files());
+    if (in.target().webappDir().isPresent()) {
+      throw new UpgradeException(
+          UpgradeException.PRECHECK,
+          in.target().dir()
+              + " holds the exploded webapp "
+              + in.target().webappDir().get()
+              + ", which buildomatic may deploy instead of the patched WAR",
+          "remove that directory from the package (keep its .war), then plan again");
+    }
+    if (war.version().isPresent() && !war.version().get().equals(in.options().toVersion())) {
+      throw new UpgradeException(
+          UpgradeException.PRECHECK,
+          "--war "
+              + war.path()
+              + " states version "
+              + war.version().get()
+              + " but --to says "
+              + in.options().toVersion(),
+          "pass the patched WAR of " + in.options().toVersion());
+    }
+    if (war.versions().size() > 1) {
+      warnings.add(
+          "the patched WAR carries vendor jars labelled "
+              + String.join(", ", war.versions())
+              + "; the product version is "
+              + war.version().orElseThrow()
+              + " and the other labels are hotfix labels");
+    }
+    warnings.add(
+        "the webapp comes from the patched WAR "
+            + war.describe()
+            + ", staged as "
+            + WarSteps.packageWar(in)
+            + " in place of the package's own; the run records both checksums");
+    return war;
   }
 
   @Override
@@ -668,6 +719,7 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
       steps.add(new VendorSteps.WriteMasterProperties(rt, hop));
       steps.add(new VendorSteps.StageKeystoreInit(rt, hop));
     }
+    prepared.war().ifPresent(war -> steps.add(new WarSteps.StagePatchedWar(rt, in, war)));
     steps.add(ServiceSteps.stop(rt, Phases.VENDOR_UPGRADE, VendorSteps.STOP_SERVICE));
     if (firstMode == Mode.NEWDB) {
       // newdb rebuilds the database from this export, so it is taken once the service is down
@@ -752,6 +804,7 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
     for (UpgradeInput hop : prepared.hops()) {
       hop.targetBuildomatic().ifPresent(b -> touched.add(b.resolve(Buildomatic.MASTER_PROPERTIES)));
     }
+    prepared.war().ifPresent(w -> touched.add(WarSteps.packageWar(in)));
     touched.addAll(in.configFiles());
     PlanSummary summary =
         new PlanSummary(
@@ -792,7 +845,7 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
         + ")";
   }
 
-  /** What the plan's fingerprint covers: every package of the route too. */
+  /** What the plan's fingerprint covers: every package of the route and the patched WAR too. */
   private Map<String, String> fingerprintInputs(
       Prepared prepared, Optional<ServerIdentity> identity, TargetPackage target) {
     UpgradeOptions options = prepared.in().options();
@@ -810,13 +863,15 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
         }
       }
     }
+    prepared.war().ifPresent(w -> inputs.put("war", w.sha256()));
     return inputs;
   }
 
   /**
-   * Issue #1: what the point-B manifest records beyond the input: the route and the package of each
-   * hop, next to the package's checksum. {@code mode} is the first hop's, the one that touched the
-   * old database, which is what a rollback asks about (ADR-0029).
+   * Issue #1 and #9: what the point-B manifest records beyond the input: the route and the package
+   * of each hop; the patched WAR's checksum, versions and build next to the package's checksum.
+   * {@code mode} is the first hop's, the one that touched the old database, which is what a
+   * rollback asks about (ADR-0029).
    */
   private static Map<String, Object> runFacts(Prepared prepared) {
     Map<String, Object> facts = new LinkedHashMap<>();
@@ -836,6 +891,17 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
       }
       facts.put("route", route);
     }
+    prepared
+        .war()
+        .ifPresent(
+            w -> {
+              Map<String, Object> war = new LinkedHashMap<>();
+              war.put("path", w.path().toString());
+              war.put("sha256", w.sha256());
+              war.put("versions", List.copyOf(w.versions()));
+              w.build().ifPresent(b -> war.put("build", b));
+              facts.put("war", war);
+            });
     return facts;
   }
 

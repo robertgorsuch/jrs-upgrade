@@ -226,6 +226,8 @@ public final class PlanRegistry {
         args.path("includeEvents").asBoolean(false),
         // and one that leaves the stored passwords as they are (issue #108)
         args.path("migratePasswords").asBoolean(false),
+        // and one that deploys the package's own webapp (issue #9)
+        text(args, "war").map(Path::of),
         // and one of a single hop (issue #1)
         transitPackages(args));
   }
@@ -270,6 +272,11 @@ public final class PlanRegistry {
       node.put("keyPasswordRef", options.keyPassword().get().render());
     } else {
       node.putNull("keyPasswordRef");
+    }
+    if (options.war().isPresent()) {
+      node.put("war", options.war().get().toString());
+    } else {
+      node.putNull("war");
     }
     ArrayNode transit = node.putArray("transitPackages");
     options.transitPackages().forEach(p -> transit.add(p.toString()));

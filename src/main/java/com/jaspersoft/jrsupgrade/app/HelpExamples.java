@@ -239,7 +239,11 @@ final class HelpExamples {
                     + " nothing",
                 "jrs-upgrade upgrade --to 10.1.0"
                     + " --package /opt/dist/jasperreports-server-pro-10.0.0-bin"
-                    + " --package /opt/dist/jasperreports-server-pro-10.1.0-bin --plan")));
+                    + " --package /opt/dist/jasperreports-server-pro-10.1.0-bin --plan"),
+            new Example(
+                "Deploy the vendor's patched WAR instead of the package's own webapp",
+                "jrs-upgrade upgrade --to 10.1.0 --package /opt/dist/jasperreports-server-pro-10.1.0-bin"
+                    + " --war /opt/dist/jasperserver-pro-10.1.0-hf.war")));
     m.put(
         "upgrade rollback",
         List.of(

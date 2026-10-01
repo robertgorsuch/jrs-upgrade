@@ -74,8 +74,9 @@ public interface UpgradeOperations {
    * vendor script leaves behind (issue #106), and means nothing for samedb; {@code
    * migratePasswords} asks a samedb upgrade to 10.1 or later to run the vendor's password migration
    * after the vendor run (issue #108), is refused for an older target and ignored with a warning
-   * for newdb. {@code transitPackages} are the unpacked packages of the intermediate versions of a
-   * multi-hop route (issue #1), in any order, matched to the hops by the version each states.
+   * for newdb. {@code war} is a patched WAR deployed instead of the package's own (issue #9);
+   * {@code transitPackages} are the unpacked packages of the intermediate versions of a multi-hop
+   * route (issue #1), in any order, matched to the hops by the version each states.
    */
   record UpgradeOptions(
       String toVersion,
@@ -88,6 +89,7 @@ public interface UpgradeOperations {
       Optional<SecretRef> keyPassword,
       boolean includeEvents,
       boolean migratePasswords,
+      Optional<Path> war,
       List<Path> transitPackages) {
     public UpgradeOptions {
       Objects.requireNonNull(toVersion, "toVersion");
@@ -97,12 +99,14 @@ public interface UpgradeOperations {
       Objects.requireNonNull(existingExport, "existingExport");
       Objects.requireNonNull(keyAlias, "keyAlias");
       Objects.requireNonNull(keyPassword, "keyPassword");
+      Objects.requireNonNull(war, "war");
       Objects.requireNonNull(transitPackages, "transitPackages");
       if (toVersion.isBlank()) {
         throw new IllegalArgumentException("toVersion must not be blank");
       }
       packageDir = packageDir.toAbsolutePath().normalize();
       existingExport = existingExport.map(p -> p.toAbsolutePath().normalize());
+      war = war.map(p -> p.toAbsolutePath().normalize());
       transitPackages = transitPackages.stream().map(p -> p.toAbsolutePath().normalize()).toList();
     }
 
@@ -129,6 +133,7 @@ public interface UpgradeOperations {
           keyPassword,
           includeEvents,
           migratePasswords,
+          Optional.empty(),
           List.of());
     }
 
@@ -214,6 +219,7 @@ public interface UpgradeOperations {
           keyPassword,
           includeEvents,
           migrate,
+          war,
           transitPackages);
     }
 
@@ -229,6 +235,7 @@ public interface UpgradeOperations {
           keyPassword,
           include,
           migratePasswords,
+          war,
           transitPackages);
     }
 
@@ -244,6 +251,7 @@ public interface UpgradeOperations {
           keyPassword,
           includeEvents,
           migratePasswords,
+          war,
           transitPackages);
     }
 
@@ -259,6 +267,7 @@ public interface UpgradeOperations {
           keyPassword,
           includeEvents,
           migratePasswords,
+          war,
           transitPackages);
     }
 
@@ -274,6 +283,24 @@ public interface UpgradeOperations {
           Optional.of(ref),
           includeEvents,
           migratePasswords,
+          war,
+          transitPackages);
+    }
+
+    /** The options with {@code patched} deployed instead of the package's own webapp (issue #9). */
+    public UpgradeOptions withWar(Path patched) {
+      return new UpgradeOptions(
+          toVersion,
+          packageDir,
+          mode,
+          dbBackupConfirmed,
+          tomcatDir,
+          existingExport,
+          keyAlias,
+          keyPassword,
+          includeEvents,
+          migratePasswords,
+          Optional.of(patched),
           transitPackages);
     }
 
@@ -290,6 +317,7 @@ public interface UpgradeOperations {
           keyPassword,
           includeEvents,
           migratePasswords,
+          war,
           packages);
     }
 
@@ -309,6 +337,7 @@ public interface UpgradeOperations {
           keyPassword,
           includeEvents,
           migratePasswords,
+          war,
           transitPackages);
     }
 
