@@ -45,6 +45,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Builds the upgrade and rollback plans of spec §10. Invariants: planning reads the installation,
@@ -282,84 +283,263 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
         + " free); to put them on another volume run with --home <dir> or JRS_UPGRADE_HOME";
   }
 
-  /** What both the upgrade and its rehearsal are planned from. */
+  /**
+   * What both the upgrade and its rehearsal are planned from; {@code in} is the last of {@code
+   * hops}.
+   */
   private record Prepared(
       UpgradeInput in,
+      List<UpgradeInput> hops,
       TargetPackage target,
       Optional<ServerIdentity> identity,
-      List<String> warnings) {}
+      Optional<PatchedWar> war,
+      List<String> warnings) {
+
+    boolean route() {
+      return hops.size() > 1;
+    }
+
+    Mode firstMode() {
+      return hops.get(0).options().mode();
+    }
+
+    Mode lastMode() {
+      return in.options().mode();
+    }
+  }
+
+  /** Issue #1, ADR-0002: what a route plan says about itself, with the route in place of %s. */
+  public static final String ROUTE_WARNING =
+      "No single documented upgrade covers this pair; the plan follows the vendor's route %s."
+          + " Every hop but the last is a transit hop: its vendor script runs against the"
+          + " repository database with appServerType=skipAppServerCheck and a scratch Tomcat"
+          + " directory, so nothing is deployed and nothing starts on an intermediate version. The"
+          + " service stays stopped from the first hop to the last, and a failure in any hop"
+          + " restores point B: a rollback never lands on an intermediate version.";
+
+  /** "8.2.0 -> 10.0.0 (newdb, transit) -> 10.1.0 (samedb)". */
+  static String describeRoute(List<CompatMatrix.RouteHop> route) {
+    StringBuilder out = new StringBuilder(route.get(0).from());
+    for (int i = 0; i < route.size(); i++) {
+      CompatMatrix.RouteHop hop = route.get(i);
+      out.append(" -> ")
+          .append(hop.to())
+          .append(" (")
+          .append(hop.mode())
+          .append(i < route.size() - 1 ? ", transit" : "")
+          .append(')');
+    }
+    return out.toString();
+  }
 
   /**
-   * The preflight every upgrade plan shares: the option consistency, the upgrade path in the
-   * matrix, the installed buildomatic, the staged properties' invariants, the Tomcat and the
-   * package; it throws for what cannot be planned and collects the warnings for what can.
+   * The hops from {@code current} to the target: the one documented pair when the matrix lists it,
+   * else the matrix's route (issue #1). Refuses with exit 6 what the matrix covers neither way, and
+   * a pair offered only in the other mode, as it always did.
+   */
+  private List<CompatMatrix.RouteHop> route(String current, UpgradeOptions options) {
+    CompatMatrix matrix = rt.services().matrix();
+    String to = options.toVersion();
+    Optional<String> problem = UpgradePaths.problem(matrix, current, to, options.mode());
+    if (problem.isEmpty()) {
+      return List.of(new CompatMatrix.RouteHop(current, to, UpgradePaths.wire(options.mode())));
+    }
+    if (!matrix.upgradeModes(current, to).isEmpty()) {
+      throw new UpgradeException(
+          UpgradeException.UNSUPPORTED, problem.get(), "choose a supported target version or mode");
+    }
+    Optional<List<CompatMatrix.RouteHop>> route =
+        matrix.route(current, to, UpgradePaths.wire(options.mode()));
+    if (route.isPresent()) {
+      return route.get();
+    }
+    Mode other = options.mode() == Mode.NEWDB ? Mode.SAMEDB : Mode.NEWDB;
+    Optional<List<CompatMatrix.RouteHop>> otherRoute =
+        matrix.route(current, to, UpgradePaths.wire(other));
+    throw new UpgradeException(
+        UpgradeException.UNSUPPORTED,
+        problem.get()
+            + otherRoute
+                .map(
+                    r ->
+                        "; the documented route "
+                            + describeRoute(r)
+                            + " starts with a "
+                            + UpgradePaths.wire(other)
+                            + " hop")
+                .orElse(", and no documented route through its releases leads there either"),
+        otherRoute
+            .map(r -> "pass --mode " + UpgradePaths.wire(other))
+            .orElse("choose a supported target version or mode"));
+  }
+
+  /**
+   * The package of every hop, by the version each package states (issue #1): the last hop takes
+   * {@code --package}'s first entry when that states no version. Refuses a route whose stops lack a
+   * package (exit 2, naming the route and the packages) and a package no hop uses (exit 1).
+   */
+  private List<Path> packagesFor(List<CompatMatrix.RouteHop> route, UpgradeOptions options) {
+    List<Path> given = new ArrayList<>();
+    given.add(options.packageDir());
+    given.addAll(options.transitPackages());
+    if (route.size() == 1) {
+      if (!options.transitPackages().isEmpty()) {
+        throw new UpgradeException(
+            UpgradeException.USAGE,
+            route.get(0).from()
+                + " -> "
+                + route.get(0).to()
+                + " is one documented upgrade and needs one package; "
+                + given.size()
+                + " were given",
+            "pass the " + route.get(0).to() + " package alone with --package");
+      }
+      return List.of(options.packageDir());
+    }
+    Map<Path, Optional<String>> stated = new LinkedHashMap<>();
+    for (Path p : given) {
+      stated.put(p, TargetPackage.inspect(p, rt.locator()).discoveredVersion());
+    }
+    List<Path> out = new ArrayList<>();
+    List<String> missing = new ArrayList<>();
+    for (int i = 0; i < route.size(); i++) {
+      String version = route.get(i).to();
+      Optional<Path> match =
+          given.stream().filter(p -> stated.get(p).filter(version::equals).isPresent()).findFirst();
+      if (match.isEmpty() && i == route.size() - 1 && stated.get(options.packageDir()).isEmpty()) {
+        match = Optional.of(options.packageDir());
+      }
+      match.ifPresentOrElse(out::add, () -> missing.add(version));
+    }
+    String described = describeRoute(route);
+    if (!missing.isEmpty()) {
+      throw new UpgradeException(
+          UpgradeException.PRECHECK,
+          route.get(0).from()
+              + " -> "
+              + options.toVersion()
+              + " is not one documented upgrade; the documented route is "
+              + described
+              + ", and no package given states "
+              + String.join(" or ", missing),
+          "pass one unpacked package per hop: "
+              + route.stream()
+                  .map(h -> "--package <" + h.to() + " package>")
+                  .collect(Collectors.joining(" ")));
+    }
+    for (Path p : given) {
+      if (!out.contains(p)) {
+        throw new UpgradeException(
+            UpgradeException.USAGE,
+            p
+                + " states version "
+                + stated.get(p).orElse("(none)")
+                + ", which is no hop of the route "
+                + described,
+            "pass only the packages the route names");
+      }
+    }
+    return out;
+  }
+
+  /**
+   * The preflight every upgrade plan shares: the option consistency, the upgrade path or route in
+   * the matrix, the packages of its hops, the installed buildomatic, the staged properties'
+   * invariants, the Tomcat, the patched WAR and the hotfix labels; it throws for what cannot be
+   * planned and collects the warnings for what can.
    */
   private Prepared prepare(UpgradeOptions options) {
     Objects.requireNonNull(options, "options");
     Config config = rt.config();
     HotfixPaths paths = paths(config);
     String webappName = webappName(config, paths);
-    TargetPackage target = TargetPackage.inspect(options.packageDir(), rt.locator());
     refuseInconsistentOptions(options);
     Optional<ServerIdentity> identity = identity();
     List<String> warnings = new ArrayList<>();
+    List<CompatMatrix.RouteHop> route;
     if (identity.isPresent()) {
-      String current = identity.get().version();
-      Optional<String> pathProblem =
-          UpgradePaths.problem(
-              rt.services().matrix(), current, options.toVersion(), options.mode());
-      if (pathProblem.isPresent()) {
-        throw new UpgradeException(
-            UpgradeException.UNSUPPORTED,
-            pathProblem.get(),
-            "choose a supported target version or mode");
-      }
+      route = route(identity.get().version(), options);
     } else {
+      if (!options.transitPackages().isEmpty()) {
+        throw new UpgradeException(
+            UpgradeException.PRECHECK,
+            "server unreachable at plan time: a route through several packages is planned from"
+                + " the version the server reports",
+            "start the server and plan again");
+      }
+      route =
+          List.of(
+              new CompatMatrix.RouteHop(
+                  "?", options.toVersion(), UpgradePaths.wire(options.mode())));
       warnings.add(
           "server unreachable at plan time; the upgrade path is verified by "
               + PreflightSteps.VERIFY_TARGET_PACKAGE);
     }
+    List<Path> packages = packagesFor(route, options);
     Path installedBuildomatic =
         UpgradeInput.resolveInstalledBuildomatic(rt.locator(), config, paths);
-    Path packageDir = options.packageDir().toAbsolutePath().normalize();
-    if (installedBuildomatic.startsWith(packageDir)) {
-      throw new UpgradeException(
-          UpgradeException.PRECHECK,
-          "the installed buildomatic directory "
-              + installedBuildomatic
-              + " lies inside the target package "
-              + packageDir,
-          "set server.buildomaticDir to the buildomatic directory of the running installation,"
-              + " not the one of the package being installed");
+    for (Path pkg : packages) {
+      if (installedBuildomatic.startsWith(pkg)) {
+        throw new UpgradeException(
+            UpgradeException.PRECHECK,
+            "the installed buildomatic directory "
+                + installedBuildomatic
+                + " lies inside the target package "
+                + pkg,
+            "set server.buildomaticDir to the buildomatic directory of the running installation,"
+                + " not the one of the package being installed");
+      }
     }
     Map<String, String> installedMaster =
         rt.locator().at(installedBuildomatic).map(Buildomatic::masterProperties).orElse(Map.of());
-    UpgradeInput in =
-        new UpgradeInput(
-            options,
-            paths,
-            webappName,
-            target,
-            identity,
-            VendorSteps.masterOverrides(
-                installedMaster,
-                options
-                    .tomcatDir()
-                    .map(p -> p.toAbsolutePath().normalize())
-                    .orElse(paths.tomcatDir()),
-                options.keyAlias()),
-            installedBuildomatic);
-    // review §1.3: Compact and Split never cross in one upgrade; the target package's own
-    // default_master.properties must not turn the installation into the other kind
-    Optional<String> crossing =
-        MasterInvariants.installTypeProblem(
-            in.masterOverrides(), in.targetMasterProperties(rt.locator()));
-    if (crossing.isPresent()) {
-      throw new UpgradeException(
-          UpgradeException.UNSUPPORTED,
-          crossing.get(),
-          "make installType and the audit.* keys in the target buildomatic's"
-              + " default_master.properties match the installed ones, or remove them there");
+    Map<String, String> finalOverrides =
+        VendorSteps.masterOverrides(
+            installedMaster,
+            options.tomcatDir().map(p -> p.toAbsolutePath().normalize()).orElse(paths.tomcatDir()),
+            options.keyAlias());
+    List<UpgradeInput> hops = new ArrayList<>();
+    for (int i = 0; i < route.size(); i++) {
+      CompatMatrix.RouteHop hop = route.get(i);
+      boolean transit = i < route.size() - 1;
+      UpgradeOptions hopOptions =
+          route.size() == 1
+              ? options
+              : options.forHop(
+                  hop.to(), packages.get(i), Mode.valueOf(hop.mode().toUpperCase(Locale.ROOT)));
+      UpgradeInput hopInput =
+          new UpgradeInput(
+              hopOptions,
+              paths,
+              webappName,
+              TargetPackage.inspect(packages.get(i), rt.locator()),
+              identity,
+              transit
+                  ? VendorSteps.transitOverrides(finalOverrides, transitAppServer(hop.to()))
+                  : finalOverrides,
+              installedBuildomatic,
+              new UpgradeInput.Hop(
+                  i + 1,
+                  route.size(),
+                  transit,
+                  i == 0 ? Optional.empty() : Optional.of(hop.from())));
+      // review §1.3: Compact and Split never cross in one upgrade; the target package's own
+      // default_master.properties must not turn the installation into the other kind
+      Optional<String> crossing =
+          MasterInvariants.installTypeProblem(
+              hopInput.masterOverrides(), hopInput.targetMasterProperties(rt.locator()));
+      if (crossing.isPresent()) {
+        throw new UpgradeException(
+            UpgradeException.UNSUPPORTED,
+            crossing.get(),
+            "make installType and the audit.* keys in the target buildomatic's"
+                + " default_master.properties match the installed ones, or remove them there");
+      }
+      hops.add(hopInput);
+    }
+    UpgradeInput in = hops.get(hops.size() - 1);
+    TargetPackage target = in.target();
+    if (hops.size() > 1) {
+      warnings.add(ROUTE_WARNING.formatted(describeRoute(route)));
     }
     warnings.add(backupsLine());
     // review §3.2 (issue #112): an upgrade run here upgrades this node's webapp only
@@ -401,16 +581,75 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
               + " needs Tomcat "
               + tomcatRanges(rt.services().matrix(), options.toVersion()));
     }
-    List<String> problems = target.problems(rt.locator().scriptExtension());
-    if (!problems.isEmpty()) {
-      warnings.add(
-          "target package: "
-              + String.join("; ", problems)
-              + " ("
-              + PreflightSteps.VERIFY_TARGET_PACKAGE
-              + " will refuse)");
+    for (UpgradeInput hop : hops) {
+      List<String> problems = hop.target().problems(rt.locator().scriptExtension());
+      if (!problems.isEmpty()) {
+        warnings.add(
+            "target package"
+                + (hop.transit() ? " for " + hop.options().toVersion() : "")
+                + ": "
+                + String.join("; ", problems)
+                + " ("
+                + hop.scoped(PreflightSteps.VERIFY_TARGET_PACKAGE)
+                + " will refuse)");
+      }
     }
-    return new Prepared(in, target, identity, warnings);
+    Optional<PatchedWar> war = options.war().map(w -> patchedWar(w, in, warnings));
+    // issue #9: hotfix labels the product never reached, named next to the version that runs
+    identity.ifPresent(
+        id ->
+            warnings.addAll(
+                HotfixLabels.mismatches(
+                    in.webappDir(), id.version(), rt.store().installedHotfixes())));
+    return new Prepared(in, List.copyOf(hops), target, identity, war, warnings);
+  }
+
+  /** ADR-0002: the scratch Tomcat directory a transit hop's buildomatic is pointed at. */
+  private Path transitAppServer(String version) {
+    return rt.home().root().resolve("transit").resolve(version).resolve("tomcat");
+  }
+
+  /**
+   * Issue #9: the patched WAR, read and checked against the final package; refuses a WAR that names
+   * another version and a package whose exploded webapp buildomatic could deploy instead.
+   */
+  private PatchedWar patchedWar(Path file, UpgradeInput in, List<String> warnings) {
+    PatchedWar war = PatchedWar.read(file, rt.files());
+    if (in.target().webappDir().isPresent()) {
+      throw new UpgradeException(
+          UpgradeException.PRECHECK,
+          in.target().dir()
+              + " holds the exploded webapp "
+              + in.target().webappDir().get()
+              + ", which buildomatic may deploy instead of the patched WAR",
+          "remove that directory from the package (keep its .war), then plan again");
+    }
+    if (war.version().isPresent() && !war.version().get().equals(in.options().toVersion())) {
+      throw new UpgradeException(
+          UpgradeException.PRECHECK,
+          "--war "
+              + war.path()
+              + " states version "
+              + war.version().get()
+              + " but --to says "
+              + in.options().toVersion(),
+          "pass the patched WAR of " + in.options().toVersion());
+    }
+    if (war.versions().size() > 1) {
+      warnings.add(
+          "the patched WAR carries vendor jars labelled "
+              + String.join(", ", war.versions())
+              + "; the product version is "
+              + war.version().orElseThrow()
+              + " and the other labels are hotfix labels");
+    }
+    warnings.add(
+        "the webapp comes from the patched WAR "
+            + war.describe()
+            + ", staged as "
+            + WarSteps.packageWar(in)
+            + " in place of the package's own; the run records both checksums");
+    return war;
   }
 
   @Override
@@ -420,16 +659,32 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
     TargetPackage target = prepared.target();
     Optional<ServerIdentity> identity = prepared.identity();
     List<String> warnings = prepared.warnings();
+    Mode firstMode = prepared.firstMode();
+    Mode lastMode = prepared.lastMode();
     warnings.add(
-        switch (options.mode()) {
+        switch (firstMode) {
           case SAMEDB -> SAMEDB_WARNING;
           case NEWDB -> NEWDB_WARNING;
         });
-    if (options.mode() == Mode.NEWDB) {
+    if (firstMode == Mode.NEWDB) {
       warnings.add(NEWDB_STAYS_STOPPED_WARNING);
       if (!options.includeEvents()) {
         warnings.add(EVENTS_LEFT_BEHIND_WARNING);
       }
+    }
+    if (options.customDdl().isPresent() && firstMode != Mode.NEWDB) {
+      throw new UpgradeException(
+          UpgradeException.USAGE,
+          "--custom-ddl re-creates customer tables after js-upgrade-newdb dropped them; samedb"
+              + " migrates the database in place and keeps them",
+          "leave --custom-ddl out, or use --mode newdb");
+    }
+    if (firstMode == Mode.NEWDB) {
+      // issue #3: customer tables in the repository database go with it; name them now
+      CustomObjectSteps.warning(
+              CustomObjectSteps.scan(rt, in.installedBuildomatic()),
+              options.customDdl().isPresent())
+          .ifPresent(warnings::add);
     }
     if (options.migratePasswords()) {
       // installation guide 10.1 pp.194-199 (issue #108): the migration utility ships with 10.1
@@ -442,19 +697,23 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
                 + " has no js-ant migrate-passwords",
             "drop --migrate-passwords, or upgrade to 10.1.0 or later");
       }
-      if (options.mode() == Mode.NEWDB) {
+      if (lastMode == Mode.NEWDB) {
         warnings.add(MIGRATE_PASSWORDS_NEWDB_WARNING);
       }
     }
-    warnings.add(options.mode() == Mode.SAMEDB ? FILES_ONLY_WARNING : NEWDB_ROLLBACK_WARNING);
+    warnings.add(firstMode == Mode.SAMEDB ? FILES_ONLY_WARNING : NEWDB_ROLLBACK_WARNING);
     warnings.add(PASSWORD_WARNING);
 
     List<Step> steps = new ArrayList<>();
     steps.add(new PreflightSteps.Doctor(rt, in));
-    steps.add(new PreflightSteps.VerifyTargetPackage(rt, in));
+    for (UpgradeInput hop : prepared.hops()) {
+      steps.add(new PreflightSteps.VerifyTargetPackage(rt, hop));
+    }
     // review §2.5 (issue #108): the vendor's own preconditions, before anything is stopped
-    steps.add(new VendorPreconditionSteps.Verify(rt, in, userHome));
-    if (options.mode() == Mode.SAMEDB) {
+    for (UpgradeInput hop : prepared.hops()) {
+      steps.add(new VendorPreconditionSteps.Verify(rt, hop, userHome));
+    }
+    if (firstMode == Mode.SAMEDB) {
       // newdb's own full export is the backup its rollback rebuilds the database from (ADR-0029);
       // samedb migrates the schema in place, which no export undoes, so it still asks
       steps.add(new PreflightSteps.ConfirmDbBackup(rt, in));
@@ -470,10 +729,13 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
     steps.add(new BackupSteps.BackupKeystore(rt, in));
     steps.add(new BackupSteps.BackupWebapp(rt, in));
     steps.add(new BackupSteps.BackupConfig(rt, in));
-    steps.add(new VendorSteps.WriteMasterProperties(rt, in));
-    steps.add(new VendorSteps.StageKeystoreInit(rt, in));
+    for (UpgradeInput hop : prepared.hops()) {
+      steps.add(new VendorSteps.WriteMasterProperties(rt, hop));
+      steps.add(new VendorSteps.StageKeystoreInit(rt, hop));
+    }
+    prepared.war().ifPresent(war -> steps.add(new WarSteps.StagePatchedWar(rt, in, war)));
     steps.add(ServiceSteps.stop(rt, Phases.VENDOR_UPGRADE, VendorSteps.STOP_SERVICE));
-    if (options.mode() == Mode.NEWDB) {
+    if (firstMode == Mode.NEWDB) {
       // newdb rebuilds the database from this export, so it is taken once the service is down
       // and nothing restarts the server before the vendor run; the vendor's own order
       // (review §1.6, ADR-0025). A vendor-phase rollback restarts the service through the stop
@@ -483,19 +745,31 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
       } else {
         steps.add(new BackupSteps.FullExport(rt, in, Phases.VENDOR_UPGRADE));
       }
+      // issue #3: the structure of the customer tables newdb drops, saved beside the export
+      steps.add(new CustomObjectSteps.DumpForeignSchema(rt, in));
     }
     if (options.tomcatDir().isPresent()) {
       steps.add(new TomcatSteps.CopyWebappToTomcat(rt, in));
     }
-    steps.add(new VendorSteps.RunVendorUpgrade(rt, in));
-    if (options.mode() == Mode.NEWDB && options.includeEvents()) {
-      // the events js-upgrade-newdb leaves behind, imported while the server is still down
-      // (upgrade guide 10.1 p.80, installation guide p.256; issue #106)
-      steps.add(new EventSteps.ImportEvents(rt, in));
+    for (UpgradeInput hop : prepared.hops()) {
+      steps.add(new VendorSteps.RunVendorUpgrade(rt, hop));
+      if (hop.hop().number() == 1 && firstMode == Mode.NEWDB && options.includeEvents()) {
+        // the events js-upgrade-newdb leaves behind, imported while the server is still down
+        // (upgrade guide 10.1 p.80, installation guide p.256; issue #106), with the js-import of
+        // the version the newdb hop built, before any later hop migrates the database
+        steps.add(new EventSteps.ImportEvents(rt, hop));
+      }
+      if (hop.hop().number() == 1 && firstMode == Mode.NEWDB) {
+        // issue #3: the operator's DDL for the customer tables newdb dropped, before any later hop
+        // and before the server starts
+        options
+            .customDdl()
+            .ifPresent(dir -> steps.add(new CustomObjectSteps.ApplyCustomDdl(rt, hop, dir)));
+      }
     }
-    if (options.mode() == Mode.SAMEDB && options.migratePasswords()) {
+    if (lastMode == Mode.SAMEDB && options.migratePasswords()) {
       // the vendor's password migration, while the server is still down (installation guide
-      // 10.1 pp.194-199; issue #108); refused for a target below 10.1 in prepare()
+      // 10.1 pp.194-199; issue #108); refused for a target below 10.1 above
       steps.add(new PasswordSteps.MigratePasswords(rt, in));
     }
     // the vendor's "Additional tasks", done while the server is still down (review §2.2)
@@ -520,14 +794,12 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
       steps.add(ServiceSteps.start(rt, Phases.RECONCILE, reapply + "-start-service"));
       steps.add(ServiceSteps.waitForServer(rt, Phases.RECONCILE, reapply + "-wait-for-server"));
     }
-    if (VendorPreconditions.atLeast(options.toVersion(), VendorPreconditions.ANALYTICS_JNDI_FROM)
-        && VendorPreconditions.below(
-            options.toVersion(), VendorPreconditions.ANALYTICS_JNDI_BELOW)) {
+    if (AnalyticsJndiSteps.applies(options.toVersion(), rt.store().customizations())) {
       // release notes 9.0 p.15 (issue #108): the two analytics JNDI resources, a WARN when missing
       steps.add(new AnalyticsJndiSteps.Check(rt, in));
     }
     steps.add(new VerifySteps.Smoke(rt, in));
-    steps.add(new VerifySteps.RecordUpgrade(rt, in));
+    steps.add(new VerifySteps.RecordUpgrade(rt, in, runFacts(prepared)));
     steps.add(new JrsUpgradeConfigSteps.PointConfigAtTarget(rt, in));
 
     Path snapshotDir = SnapshotSet.placeholder(rt.home());
@@ -538,8 +810,12 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
     rollbackPoints.put(
         Phases.VENDOR_UPGRADE,
         "point C = restore point B (webapp, buildomatic, configuration, keystore)"
-            + (options.mode() == Mode.NEWDB
+            + (firstMode == Mode.NEWDB
                 ? "; the full export is taken here, after the stop, and kept under " + snapshotDir
+                : "")
+            + (prepared.route()
+                ? "; a failure in any hop, transit or last, restores point B, never an"
+                    + " intermediate version"
                 : ""));
     rollbackPoints.put(Phases.RECONCILE, "restore point B");
     rollbackPoints.put(
@@ -548,17 +824,15 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
     List<Path> touched = new ArrayList<>();
     touched.add(in.webappDir());
     touched.add(in.installedBuildomatic());
-    in.targetBuildomatic().ifPresent(b -> touched.add(b.resolve(Buildomatic.MASTER_PROPERTIES)));
+    for (UpgradeInput hop : prepared.hops()) {
+      hop.targetBuildomatic().ifPresent(b -> touched.add(b.resolve(Buildomatic.MASTER_PROPERTIES)));
+    }
+    prepared.war().ifPresent(w -> touched.add(WarSteps.packageWar(in)));
     touched.addAll(in.configFiles());
     PlanSummary summary =
         new PlanSummary(
             UPGRADE_OPERATION,
-            identity.map(ServerIdentity::version).orElse("?")
-                + " -> "
-                + options.toVersion()
-                + " ("
-                + options.mode().name().toLowerCase(java.util.Locale.ROOT)
-                + ")",
+            title(prepared, identity),
             touched,
             List.of(),
             true,
@@ -566,15 +840,93 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
             rollbackPoints,
             STRATEGY,
             warnings);
+    Map<String, String> inputs = fingerprintInputs(prepared, identity, target);
+    inputs.put("includeEvents", Boolean.toString(options.includeEvents()));
+    return new Plan(
+        "upgrade-" + RunIds.next(rt.clock()), steps, summary, PlanFingerprint.of(inputs));
+  }
+
+  /** "8.2.0 -> 9.0.0 (newdb)" or, for a route, the route. */
+  private static String title(Prepared prepared, Optional<ServerIdentity> identity) {
+    if (prepared.route()) {
+      List<CompatMatrix.RouteHop> hops = new ArrayList<>();
+      String from = identity.map(ServerIdentity::version).orElse("?");
+      for (UpgradeInput hop : prepared.hops()) {
+        hops.add(
+            new CompatMatrix.RouteHop(
+                hop.hop().from().orElse(from),
+                hop.options().toVersion(),
+                UpgradePaths.wire(hop.options().mode())));
+      }
+      return describeRoute(hops);
+    }
+    return identity.map(ServerIdentity::version).orElse("?")
+        + " -> "
+        + prepared.in().options().toVersion()
+        + " ("
+        + UpgradePaths.wire(prepared.in().options().mode())
+        + ")";
+  }
+
+  /** What the plan's fingerprint covers: every package of the route and the patched WAR too. */
+  private Map<String, String> fingerprintInputs(
+      Prepared prepared, Optional<ServerIdentity> identity, TargetPackage target) {
+    UpgradeOptions options = prepared.in().options();
     Map<String, String> inputs = new LinkedHashMap<>();
     inputs.put("server", identity.map(ServerIdentity::fingerprintInput).orElse("unreachable"));
     inputs.put("package", target.contentHash());
     inputs.put("config", configHash(rt.config()));
     inputs.put("to", options.toVersion());
-    inputs.put("mode", options.mode().name());
-    inputs.put("includeEvents", Boolean.toString(options.includeEvents()));
-    return new Plan(
-        "upgrade-" + RunIds.next(rt.clock()), steps, summary, PlanFingerprint.of(inputs));
+    inputs.put("mode", prepared.firstMode().name());
+    options.customDdl().ifPresent(d -> inputs.put("customDdl", d.toString()));
+    if (prepared.route()) {
+      inputs.put("route", title(prepared, identity));
+      for (UpgradeInput hop : prepared.hops()) {
+        if (hop.transit()) {
+          inputs.put("package@" + hop.options().toVersion(), hop.target().contentHash());
+        }
+      }
+    }
+    prepared.war().ifPresent(w -> inputs.put("war", w.sha256()));
+    return inputs;
+  }
+
+  /**
+   * Issue #1 and #9: what the point-B manifest records beyond the input: the route and the package
+   * of each hop; the patched WAR's checksum, versions and build next to the package's checksum.
+   * {@code mode} is the first hop's, the one that touched the old database, which is what a
+   * rollback asks about (ADR-0029).
+   */
+  private static Map<String, Object> runFacts(Prepared prepared) {
+    Map<String, Object> facts = new LinkedHashMap<>();
+    facts.put("mode", prepared.firstMode().name());
+    facts.put("package", prepared.in().target().dir().toString());
+    facts.put("packageContentHash", prepared.in().target().contentHash());
+    if (prepared.route()) {
+      List<String> route = new ArrayList<>();
+      for (UpgradeInput hop : prepared.hops()) {
+        route.add(
+            hop.options().toVersion()
+                + " "
+                + UpgradePaths.wire(hop.options().mode())
+                + (hop.transit() ? " transit" : "")
+                + " "
+                + hop.target().dir());
+      }
+      facts.put("route", route);
+    }
+    prepared
+        .war()
+        .ifPresent(
+            w -> {
+              Map<String, Object> war = new LinkedHashMap<>();
+              war.put("path", w.path().toString());
+              war.put("sha256", w.sha256());
+              war.put("versions", List.copyOf(w.versions()));
+              w.build().ifPresent(b -> war.put("build", b));
+              facts.put("war", war);
+            });
+    return facts;
   }
 
   /** Spec §10.2 "Rehearsal": what the plan says about itself, in one line. */
@@ -593,24 +945,32 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
     warnings.add(REHEARSAL_WARNING);
     for (String w : prepared.warnings()) {
       // the upgrade's own warnings about what it will do to the server do not apply; the ones
-      // about what was found (server unreachable, package problems, Tomcat) do
+      // about what was found (server unreachable, package problems, Tomcat, the route) do
       if (w.startsWith("server unreachable")
-          || w.startsWith("target package:")
-          || w.startsWith("the Tomcat version")) {
+          || w.startsWith("target package")
+          || w.startsWith("the Tomcat version")
+          || w.startsWith("No single documented upgrade")) {
         warnings.add(w);
       }
     }
-    VendorSteps.WriteMasterProperties master = new VendorSteps.WriteMasterProperties(rt, in);
-    VendorSteps.StageKeystoreInit keystore = new VendorSteps.StageKeystoreInit(rt, in);
     List<Step> steps = new ArrayList<>();
     steps.add(new PreflightSteps.Doctor(rt, in));
-    steps.add(new PreflightSteps.VerifyTargetPackage(rt, in));
+    for (UpgradeInput hop : prepared.hops()) {
+      steps.add(new PreflightSteps.VerifyTargetPackage(rt, hop));
+    }
     // review §2.5 (issue #108): the vendor's own preconditions, before anything is stopped
-    steps.add(new VendorPreconditionSteps.Verify(rt, in, userHome));
-    steps.add(master);
-    steps.add(keystore);
-    steps.add(new RehearsalSteps.RunVendorTest(rt, in));
-    steps.add(new RehearsalSteps.UnstageTargetPackage(rt, master, keystore));
+    for (UpgradeInput hop : prepared.hops()) {
+      steps.add(new VendorPreconditionSteps.Verify(rt, hop, userHome));
+    }
+    // issue #1: the vendor's validation for every hop of a route, each package put back after
+    for (UpgradeInput hop : prepared.hops()) {
+      VendorSteps.WriteMasterProperties master = new VendorSteps.WriteMasterProperties(rt, hop);
+      VendorSteps.StageKeystoreInit keystore = new VendorSteps.StageKeystoreInit(rt, hop);
+      steps.add(master);
+      steps.add(keystore);
+      steps.add(new RehearsalSteps.RunVendorTest(rt, hop));
+      steps.add(new RehearsalSteps.UnstageTargetPackage(rt, master, keystore));
+    }
     Map<String, String> rollbackPoints = new LinkedHashMap<>();
     rollbackPoints.put(Phases.PREFLIGHT, "nothing mutated");
     rollbackPoints.put(
@@ -618,17 +978,13 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
         "only the target package's buildomatic is touched (staged files), and it is put back as"
             + " it was at the end or on failure");
     List<Path> touched = new ArrayList<>();
-    in.targetBuildomatic().ifPresent(b -> touched.add(b.resolve(Buildomatic.MASTER_PROPERTIES)));
+    for (UpgradeInput hop : prepared.hops()) {
+      hop.targetBuildomatic().ifPresent(b -> touched.add(b.resolve(Buildomatic.MASTER_PROPERTIES)));
+    }
     PlanSummary summary =
         new PlanSummary(
             TEST_OPERATION,
-            "rehearsal of "
-                + identity.map(ServerIdentity::version).orElse("?")
-                + " -> "
-                + options.toVersion()
-                + " ("
-                + options.mode().name().toLowerCase(Locale.ROOT)
-                + ")",
+            "rehearsal of " + title(prepared, identity),
             touched,
             List.of(),
             false,
@@ -636,12 +992,7 @@ public final class DefaultUpgradeOperations implements UpgradeOperations {
             rollbackPoints,
             STRATEGY,
             warnings);
-    Map<String, String> inputs = new LinkedHashMap<>();
-    inputs.put("server", identity.map(ServerIdentity::fingerprintInput).orElse("unreachable"));
-    inputs.put("package", target.contentHash());
-    inputs.put("config", configHash(rt.config()));
-    inputs.put("to", options.toVersion());
-    inputs.put("mode", options.mode().name());
+    Map<String, String> inputs = fingerprintInputs(prepared, identity, target);
     inputs.put("test", "true");
     return new Plan(
         "upgrade-test-" + RunIds.next(rt.clock()), steps, summary, PlanFingerprint.of(inputs));

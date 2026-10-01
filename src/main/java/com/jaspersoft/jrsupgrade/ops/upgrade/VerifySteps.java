@@ -146,10 +146,21 @@ final class VerifySteps {
   static final class RecordUpgrade implements Step {
     private final UpgradeRuntime rt;
     private final UpgradeInput in;
+    private final Map<String, Object> facts;
 
     RecordUpgrade(UpgradeRuntime rt, UpgradeInput in) {
+      this(rt, in, Map.of());
+    }
+
+    /**
+     * {@code facts} are what the plan knew that the input alone does not say (issue #1: the route
+     * and its packages; issue #9: the patched WAR's checksum and build), written into the point-B
+     * manifest after the keys this step always writes, whose values they may replace.
+     */
+    RecordUpgrade(UpgradeRuntime rt, UpgradeInput in, Map<String, Object> facts) {
       this.rt = Objects.requireNonNull(rt, "rt");
       this.in = Objects.requireNonNull(in, "in");
+      this.facts = Map.copyOf(facts);
     }
 
     private Path marker(Context ctx) {
@@ -261,6 +272,7 @@ final class VerifySteps {
       set.externalExport().ifPresent(e -> artefacts.put("external:" + e.path(), e.sha256()));
       m.put("artefacts", artefacts);
       m.put("recordedAt", rt.clock().instant().toString());
+      new java.util.TreeMap<>(facts).forEach(m::put);
       return m;
     }
 

@@ -3,6 +3,7 @@ package com.jaspersoft.jrsupgrade.ops.upgrade;
 import com.jaspersoft.jrsupgrade.core.engine.Plan;
 import com.jaspersoft.jrsupgrade.core.secrets.SecretRef;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -73,7 +74,11 @@ public interface UpgradeOperations {
    * vendor script leaves behind (issue #106), and means nothing for samedb; {@code
    * migratePasswords} asks a samedb upgrade to 10.1 or later to run the vendor's password migration
    * after the vendor run (issue #108), is refused for an older target and ignored with a warning
-   * for newdb.
+   * for newdb. {@code war} is a patched WAR deployed instead of the package's own (issue #9);
+   * {@code transitPackages} are the unpacked packages of the intermediate versions of a multi-hop
+   * route (issue #1), in any order, matched to the hops by the version each states; {@code
+   * customDdl} is a directory of SQL scripts re-applied after a newdb hop rebuilt the database
+   * (issue #3).
    */
   record UpgradeOptions(
       String toVersion,
@@ -85,7 +90,10 @@ public interface UpgradeOperations {
       Optional<String> keyAlias,
       Optional<SecretRef> keyPassword,
       boolean includeEvents,
-      boolean migratePasswords) {
+      boolean migratePasswords,
+      Optional<Path> war,
+      List<Path> transitPackages,
+      Optional<Path> customDdl) {
     public UpgradeOptions {
       Objects.requireNonNull(toVersion, "toVersion");
       Objects.requireNonNull(packageDir, "packageDir");
@@ -94,11 +102,45 @@ public interface UpgradeOperations {
       Objects.requireNonNull(existingExport, "existingExport");
       Objects.requireNonNull(keyAlias, "keyAlias");
       Objects.requireNonNull(keyPassword, "keyPassword");
+      Objects.requireNonNull(war, "war");
+      Objects.requireNonNull(transitPackages, "transitPackages");
+      Objects.requireNonNull(customDdl, "customDdl");
       if (toVersion.isBlank()) {
         throw new IllegalArgumentException("toVersion must not be blank");
       }
       packageDir = packageDir.toAbsolutePath().normalize();
       existingExport = existingExport.map(p -> p.toAbsolutePath().normalize());
+      war = war.map(p -> p.toAbsolutePath().normalize());
+      transitPackages = transitPackages.stream().map(p -> p.toAbsolutePath().normalize()).toList();
+      customDdl = customDdl.map(p -> p.toAbsolutePath().normalize());
+    }
+
+    /** The options with the package's own webapp, one hop and no custom DDL. */
+    public UpgradeOptions(
+        String toVersion,
+        Path packageDir,
+        Mode mode,
+        boolean dbBackupConfirmed,
+        Optional<Path> tomcatDir,
+        Optional<Path> existingExport,
+        Optional<String> keyAlias,
+        Optional<SecretRef> keyPassword,
+        boolean includeEvents,
+        boolean migratePasswords) {
+      this(
+          toVersion,
+          packageDir,
+          mode,
+          dbBackupConfirmed,
+          tomcatDir,
+          existingExport,
+          keyAlias,
+          keyPassword,
+          includeEvents,
+          migratePasswords,
+          Optional.empty(),
+          List.of(),
+          Optional.empty());
     }
 
     /** The options with the events and the passwords left where the vendor script leaves them. */
@@ -148,20 +190,6 @@ public interface UpgradeOperations {
           false);
     }
 
-    public UpgradeOptions withMigratePasswords(boolean migrate) {
-      return new UpgradeOptions(
-          toVersion,
-          packageDir,
-          mode,
-          dbBackupConfirmed,
-          tomcatDir,
-          existingExport,
-          keyAlias,
-          keyPassword,
-          includeEvents,
-          migrate);
-    }
-
     /** The options with this run's own export and the server's own key. */
     public UpgradeOptions(
         String toVersion,
@@ -180,6 +208,28 @@ public interface UpgradeOperations {
           Optional.empty());
     }
 
+    /** The options with the webapp staying in the Tomcat the server runs in now. */
+    public UpgradeOptions(String toVersion, Path packageDir, Mode mode, boolean dbBackupConfirmed) {
+      this(toVersion, packageDir, mode, dbBackupConfirmed, Optional.empty());
+    }
+
+    public UpgradeOptions withMigratePasswords(boolean migrate) {
+      return new UpgradeOptions(
+          toVersion,
+          packageDir,
+          mode,
+          dbBackupConfirmed,
+          tomcatDir,
+          existingExport,
+          keyAlias,
+          keyPassword,
+          includeEvents,
+          migrate,
+          war,
+          transitPackages,
+          customDdl);
+    }
+
     public UpgradeOptions withIncludeEvents(boolean include) {
       return new UpgradeOptions(
           toVersion,
@@ -191,12 +241,10 @@ public interface UpgradeOperations {
           keyAlias,
           keyPassword,
           include,
-          migratePasswords);
-    }
-
-    /** The options with the webapp staying in the Tomcat the server runs in now. */
-    public UpgradeOptions(String toVersion, Path packageDir, Mode mode, boolean dbBackupConfirmed) {
-      this(toVersion, packageDir, mode, dbBackupConfirmed, Optional.empty());
+          migratePasswords,
+          war,
+          transitPackages,
+          customDdl);
     }
 
     public UpgradeOptions withExistingExport(Path export) {
@@ -210,7 +258,10 @@ public interface UpgradeOperations {
           keyAlias,
           keyPassword,
           includeEvents,
-          migratePasswords);
+          migratePasswords,
+          war,
+          transitPackages,
+          customDdl);
     }
 
     public UpgradeOptions withKeyAlias(String alias) {
@@ -224,7 +275,10 @@ public interface UpgradeOperations {
           Optional.of(alias),
           keyPassword,
           includeEvents,
-          migratePasswords);
+          migratePasswords,
+          war,
+          transitPackages,
+          customDdl);
     }
 
     public UpgradeOptions withKeyPassword(SecretRef ref) {
@@ -237,7 +291,86 @@ public interface UpgradeOperations {
           existingExport,
           keyAlias,
           Optional.of(ref),
-          includeEvents);
+          includeEvents,
+          migratePasswords,
+          war,
+          transitPackages,
+          customDdl);
+    }
+
+    /** The options with {@code patched} deployed instead of the package's own webapp (issue #9). */
+    public UpgradeOptions withWar(Path patched) {
+      return new UpgradeOptions(
+          toVersion,
+          packageDir,
+          mode,
+          dbBackupConfirmed,
+          tomcatDir,
+          existingExport,
+          keyAlias,
+          keyPassword,
+          includeEvents,
+          migratePasswords,
+          Optional.of(patched),
+          transitPackages,
+          customDdl);
+    }
+
+    /** The options with the packages of a route's intermediate versions (issue #1). */
+    public UpgradeOptions withTransitPackages(List<Path> packages) {
+      return new UpgradeOptions(
+          toVersion,
+          packageDir,
+          mode,
+          dbBackupConfirmed,
+          tomcatDir,
+          existingExport,
+          keyAlias,
+          keyPassword,
+          includeEvents,
+          migratePasswords,
+          war,
+          packages,
+          customDdl);
+    }
+
+    /** The options with SQL scripts re-applied after a newdb hop (issue #3). */
+    public UpgradeOptions withCustomDdl(Path dir) {
+      return new UpgradeOptions(
+          toVersion,
+          packageDir,
+          mode,
+          dbBackupConfirmed,
+          tomcatDir,
+          existingExport,
+          keyAlias,
+          keyPassword,
+          includeEvents,
+          migratePasswords,
+          war,
+          transitPackages,
+          Optional.of(dir));
+    }
+
+    /**
+     * These options for one hop of a route: its version, package and mode; every hop shares the
+     * rest.
+     */
+    UpgradeOptions forHop(String version, Path pkg, Mode hopMode) {
+      return new UpgradeOptions(
+          version,
+          pkg,
+          hopMode,
+          dbBackupConfirmed,
+          tomcatDir,
+          existingExport,
+          keyAlias,
+          keyPassword,
+          includeEvents,
+          migratePasswords,
+          war,
+          transitPackages,
+          customDdl);
     }
 
     public static UpgradeOptions newdb(String toVersion, Path packageDir) {

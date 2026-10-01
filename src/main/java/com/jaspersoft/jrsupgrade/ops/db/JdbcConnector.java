@@ -2,6 +2,7 @@ package com.jaspersoft.jrsupgrade.ops.db;
 
 import com.jaspersoft.jrsupgrade.core.secrets.Secret;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -35,6 +36,19 @@ public interface JdbcConnector {
      * that saw the whole script, so a statement whose body holds semicolons must arrive here whole.
      */
     void executeStatement(String statement) throws JdbcException;
+
+    /**
+     * The tables and sequences of the connection's own schema, from the driver's metadata (issue
+     * #3); read-only. Drivers that report sequences through other means (Oracle) list tables only.
+     */
+    List<DbObject> objects() throws JdbcException;
+
+    /**
+     * A {@code CREATE TABLE} statement rebuilt from the driver's metadata for {@code table}: column
+     * names, types, sizes, nullability and the primary key. An approximation for the operator to
+     * check, not the original DDL (no defaults, indexes, constraints beyond the key); read-only.
+     */
+    String tableDdl(String table) throws JdbcException;
 
     @Override
     void close() throws JdbcException;

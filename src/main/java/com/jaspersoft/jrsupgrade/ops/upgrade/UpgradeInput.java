@@ -24,8 +24,11 @@ import java.util.Optional;
  * was built (empty when the server was unreachable). Invariants: paths are absolute and normalised;
  * {@code masterOverrides} never contains a key whose name contains "pass" (spec §7.4 copies the
  * database settings minus passwords); {@code installedBuildomatic} is the tree the locator settled
- * on at planning time, which may be on another volume or a share (ADR-0013); the record is
- * immutable.
+ * on at planning time, which may be on another volume or a share (ADR-0013); {@code hop} says which
+ * hop of a route this input describes (issue #1, ADR-0002): a transit hop's steps carry the hop's
+ * version in their ids and keep their run files in a directory of their own, so two hops of one
+ * plan never share a journal row or a marker, while a single hop and the final hop of a route keep
+ * the ids and files a one-hop upgrade always had; the record is immutable.
  */
 record UpgradeInput(
     UpgradeOptions options,
@@ -34,9 +37,66 @@ record UpgradeInput(
     TargetPackage target,
     Optional<ServerIdentity> identity,
     Map<String, String> masterOverrides,
-    Path installedBuildomatic) {
+    Path installedBuildomatic,
+    Hop hop) {
 
   static final String BUILDOMATIC = "buildomatic";
+
+  /**
+   * One hop of an upgrade route. A transit hop (ADR-0002) runs the vendor script of an intermediate
+   * package against the repository database and deploys nothing: buildomatic is told {@code
+   * appServerType=skipAppServerCheck} and pointed at a scratch Tomcat directory, never the live
+   * one; only the final hop deploys and starts. {@code from} is the version the hop starts from
+   * when that is not the server's own (every hop of a route but the first).
+   */
+  record Hop(int number, int of, boolean transit, Optional<String> from) {
+    static final Hop SINGLE = new Hop(1, 1, false, Optional.empty());
+
+    Hop {
+      Objects.requireNonNull(from, "from");
+      if (number < 1 || number > of) {
+        throw new IllegalArgumentException("hop " + number + " of " + of);
+      }
+      if (transit && number == of) {
+        throw new IllegalArgumentException("the last hop of a route is never a transit hop");
+      }
+    }
+  }
+
+  /** The input of a one-hop upgrade. */
+  UpgradeInput(
+      UpgradeOptions options,
+      HotfixPaths paths,
+      String webappName,
+      TargetPackage target,
+      Optional<ServerIdentity> identity,
+      Map<String, String> masterOverrides,
+      Path installedBuildomatic) {
+    this(
+        options,
+        paths,
+        webappName,
+        target,
+        identity,
+        masterOverrides,
+        installedBuildomatic,
+        Hop.SINGLE);
+  }
+
+  boolean transit() {
+    return hop.transit();
+  }
+
+  /** {@code id} for this hop: unchanged for a single or final hop, {@code id@<version>} else. */
+  String scoped(String id) {
+    return hop.transit() ? id + "@" + options.toVersion() : id;
+  }
+
+  /** Where this hop's steps keep their markers and backups for run {@code ctx.runId()}. */
+  Path runDir(Context ctx) {
+    Path run = ctx.home().runDir(ctx.runId());
+    return hop.transit() ? run.resolve("transit-" + options.toVersion()) : run;
+  }
 
   UpgradeInput {
     Objects.requireNonNull(options, "options");
@@ -44,6 +104,7 @@ record UpgradeInput(
     Objects.requireNonNull(webappName, "webappName");
     Objects.requireNonNull(target, "target");
     Objects.requireNonNull(identity, "identity");
+    Objects.requireNonNull(hop, "hop");
     masterOverrides = Map.copyOf(masterOverrides);
     installedBuildomatic =
         Objects.requireNonNull(installedBuildomatic, "installedBuildomatic")

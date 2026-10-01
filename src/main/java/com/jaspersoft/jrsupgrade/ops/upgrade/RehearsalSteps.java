@@ -61,7 +61,7 @@ final class RehearsalSteps {
 
     @Override
     public String id() {
-      return RUN_VENDOR_TEST;
+      return in.scoped(RUN_VENDOR_TEST);
     }
 
     @Override
@@ -179,7 +179,8 @@ final class RehearsalSteps {
 
     @Override
     public String id() {
-      return UNSTAGE_TARGET_PACKAGE;
+      // the hop of the staging it undoes (issue #1): a transit hop's carries its version
+      return master.id().replace(VendorSteps.WRITE_MASTER_PROPERTIES, UNSTAGE_TARGET_PACKAGE);
     }
 
     @Override

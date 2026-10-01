@@ -201,7 +201,7 @@ final class PreflightSteps {
 
     @Override
     public String id() {
-      return VERIFY_TARGET_PACKAGE;
+      return in.scoped(VERIFY_TARGET_PACKAGE);
     }
 
     @Override
@@ -266,8 +266,10 @@ final class PreflightSteps {
             "server unreachable, current version unknown: " + e.getMessage(),
             "start the server; the upgrade path is checked against its reported version");
       }
+      // a later hop of a route starts from the version the hop before it reached (issue #1)
+      String from = in.hop().from().orElse(current);
       Optional<String> pathProblem =
-          UpgradePaths.problem(rt.services().matrix(), current, to, in.options().mode());
+          UpgradePaths.problem(rt.services().matrix(), from, to, in.options().mode());
       if (pathProblem.isPresent()) {
         return CheckResult.fail(
             pathProblem.get(),
@@ -315,6 +317,10 @@ final class PreflightSteps {
                 + " needs "
                 + required,
             "set vendor.javaHome to a " + required + " JDK");
+      }
+      if (in.transit()) {
+        // ADR-0002: a transit hop deploys nothing, so no Tomcat ever hosts its version
+        return CheckResult.pass();
       }
       // review §2.1: 10.0 moved to Jakarta EE, so the Tomcat that will host the target must be
       // one the platform sheet certifies for it

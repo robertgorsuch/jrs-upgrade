@@ -8,6 +8,8 @@ import com.jaspersoft.jrsupgrade.core.engine.Plan;
 import com.jaspersoft.jrsupgrade.core.engine.RunOptions;
 import com.jaspersoft.jrsupgrade.core.engine.RunOutcome;
 import com.jaspersoft.jrsupgrade.core.engine.Step;
+import com.jaspersoft.jrsupgrade.core.engine.StepResult;
+import com.jaspersoft.jrsupgrade.core.state.Customization;
 import com.jaspersoft.jrsupgrade.ops.ReportItem;
 import com.jaspersoft.jrsupgrade.ops.TomcatJavaOpts;
 import com.jaspersoft.jrsupgrade.ops.doctor.DoctorOperation;
@@ -19,7 +21,9 @@ import com.jaspersoft.jrsupgrade.ops.upgrade.UpgradeOperations.RollbackPoint;
 import com.jaspersoft.jrsupgrade.ops.upgrade.UpgradeOperations.UpgradeOptions;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -103,6 +107,7 @@ class UpgradePlanTest {
               "stage-keystore-init",
               "stop-service",
               "full-export",
+              "dump-foreign-schema",
               "run-vendor-upgrade",
               "clear-tomcat-caches",
               "clear-repository-cache",
@@ -563,6 +568,38 @@ class UpgradePlanTest {
           .contains("jdbc/jasperserverSystemAnalytics")
           .contains("jdbc/jasperserverAuditAnalytics");
       assertThat(UpgradeFixture.ids(ten)).doesNotContain("check-analytics-jndi");
+    }
+  }
+
+  /**
+   * Issue #11, upgrade guide 10.1 p.93: a customer copy of {@code context.xml} can drop the two
+   * resources on any target from 9.0, so a registered one brings the check to 10.x as well.
+   */
+  @Test
+  void should_check_the_analytics_jndi_resources_on_10_x_when_context_xml_is_customized()
+      throws Exception {
+    try (UpgradeFixture f = UpgradeFixture.create(tmp)) {
+      Path contextXml = f.webappDir.resolve("META-INF").resolve("context.xml");
+      f.store()
+          .registerCustomization(
+              new Customization(contextXml, "aa", Optional.empty(), Instant.EPOCH));
+
+      Plan ten = f.ops().planUpgrade(UpgradeOptions.newdb("10.0.0", f.packageDir));
+      Step check = UpgradeFixture.step(ten, "check-analytics-jndi");
+      UpgradeFixture.write(
+          contextXml,
+          "<Context><Resource name=\"jdbc/jasperserverSystemAnalytics\"/>"
+              + "<Resource name=\"jdbc/bigquery\" url=\"${BQ_URL}\"/></Context>");
+
+      assertThat(check.execute(f.ctx("r-jndi"), f.events::add)).isInstanceOf(StepResult.Ok.class);
+      assertThat(f.logs())
+          .anySatisfy(
+              line ->
+                  assertThat(line)
+                      .contains(contextXml.toString())
+                      .contains("jdbc/jasperserverAuditAnalytics")
+                      .contains("10.0.0"));
+      assertThat(AnalyticsJndiSteps.applies("8.2.0", f.store().customizations())).isFalse();
     }
   }
 

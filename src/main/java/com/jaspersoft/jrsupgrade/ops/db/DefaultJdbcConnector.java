@@ -9,6 +9,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.Driver;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -16,6 +17,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.ServiceConfigurationError;
@@ -167,6 +169,82 @@ public final class DefaultJdbcConnector implements JdbcConnector {
       } catch (SQLException e) {
         throw new JdbcException(
             JdbcException.Kind.SQL_FAILED, "statement failed: " + e.getMessage(), e);
+      }
+    }
+
+    @Override
+    public List<DbObject> objects() throws JdbcException {
+      List<DbObject> out = new ArrayList<>();
+      try {
+        DatabaseMetaData md = connection.getMetaData();
+        try (ResultSet rs =
+            md.getTables(
+                connection.getCatalog(),
+                connection.getSchema(),
+                "%",
+                new String[] {"TABLE", "SEQUENCE"})) {
+          while (rs.next()) {
+            String name = rs.getString("TABLE_NAME");
+            String type = rs.getString("TABLE_TYPE");
+            if (name != null && !name.isBlank()) {
+              out.add(
+                  new DbObject(
+                      "SEQUENCE".equalsIgnoreCase(type)
+                          ? DbObject.Kind.SEQUENCE
+                          : DbObject.Kind.TABLE,
+                      name));
+            }
+          }
+        }
+        return out;
+      } catch (SQLException e) {
+        throw new JdbcException(
+            JdbcException.Kind.SQL_FAILED, "cannot list the schema's tables: " + e.getMessage(), e);
+      }
+    }
+
+    @Override
+    public String tableDdl(String table) throws JdbcException {
+      try {
+        DatabaseMetaData md = connection.getMetaData();
+        String catalog = connection.getCatalog();
+        String schema = connection.getSchema();
+        List<String> columns = new ArrayList<>();
+        try (ResultSet rs = md.getColumns(catalog, schema, table, "%")) {
+          while (rs.next()) {
+            String type = rs.getString("TYPE_NAME");
+            int size = rs.getInt("COLUMN_SIZE");
+            int digits = rs.getInt("DECIMAL_DIGITS");
+            String lower = type == null ? "" : type.toLowerCase(Locale.ROOT);
+            String sized =
+                lower.contains("char")
+                    ? type + "(" + size + ")"
+                    : (lower.contains("numeric") || lower.contains("decimal")) && size > 0
+                        ? type + "(" + size + "," + digits + ")"
+                        : type;
+            columns.add(
+                "  "
+                    + rs.getString("COLUMN_NAME")
+                    + " "
+                    + sized
+                    + ("NO".equalsIgnoreCase(rs.getString("IS_NULLABLE")) ? " NOT NULL" : ""));
+          }
+        }
+        List<String> key = new ArrayList<>();
+        try (ResultSet rs = md.getPrimaryKeys(catalog, schema, table)) {
+          while (rs.next()) {
+            key.add(rs.getString("COLUMN_NAME"));
+          }
+        }
+        if (!key.isEmpty()) {
+          columns.add("  PRIMARY KEY (" + String.join(", ", key) + ")");
+        }
+        return "CREATE TABLE " + table + " (\n" + String.join(",\n", columns) + "\n)";
+      } catch (SQLException e) {
+        throw new JdbcException(
+            JdbcException.Kind.SQL_FAILED,
+            "cannot describe table " + table + ": " + e.getMessage(),
+            e);
       }
     }
 

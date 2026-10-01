@@ -21,12 +21,14 @@ import com.jaspersoft.jrsupgrade.jrs.vendor.Buildomatic;
 import com.jaspersoft.jrsupgrade.jrs.vendor.MasterProperties;
 import com.jaspersoft.jrsupgrade.jrs.vendor.VendorRun;
 import com.jaspersoft.jrsupgrade.jrs.vendor.VendorTools;
+import com.jaspersoft.jrsupgrade.ops.JrsVersion;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -114,6 +116,23 @@ final class VendorSteps {
     return Map.copyOf(overrides);
   }
 
+  /** ADR-0002: what a transit hop's buildomatic is told instead of the live Tomcat. */
+  static final String SKIP_APP_SERVER_CHECK = "skipAppServerCheck";
+
+  /**
+   * {@code overrides} for a transit hop (issue #1, ADR-0002): {@code
+   * appServerType=skipAppServerCheck}, the vendor's setting for running buildomatic with no
+   * application server (the NGRA guide's migration host), and {@code appServerDir} at {@code
+   * scratch}, so that a buildomatic that deploys anyway deploys there and never into the live
+   * Tomcat.
+   */
+  static Map<String, String> transitOverrides(Map<String, String> overrides, Path scratch) {
+    Map<String, String> out = new LinkedHashMap<>(overrides);
+    out.put(APP_SERVER_TYPE, SKIP_APP_SERVER_CHECK);
+    out.put(APP_SERVER_DIR, scratch.toAbsolutePath().normalize().toString());
+    return Map.copyOf(out);
+  }
+
   /**
    * Review §1.4: buildomatic resolves the server keystore through {@code keystore.init.properties}
    * ({@code ks}, {@code ksp}) in the buildomatic directory it runs from, then the home of the
@@ -154,18 +173,16 @@ final class VendorSteps {
     }
 
     private Path backup(Context ctx) {
-      return ctx.home()
-          .runDir(ctx.runId())
-          .resolve(KeystoreInspector.INIT_PROPERTIES + BACKUP_SUFFIX);
+      return in.runDir(ctx).resolve(KeystoreInspector.INIT_PROPERTIES + BACKUP_SUFFIX);
     }
 
     private Path marker(Context ctx) {
-      return ctx.home().runDir(ctx.runId()).resolve(WRITTEN_MARKER);
+      return in.runDir(ctx).resolve(WRITTEN_MARKER);
     }
 
     @Override
     public String id() {
-      return STAGE_KEYSTORE_INIT;
+      return in.scoped(STAGE_KEYSTORE_INIT);
     }
 
     @Override
@@ -358,7 +375,7 @@ final class VendorSteps {
 
     @Override
     public String id() {
-      return WRITE_MASTER_PROPERTIES;
+      return in.scoped(WRITE_MASTER_PROPERTIES);
     }
 
     @Override
@@ -396,7 +413,7 @@ final class VendorSteps {
 
     @Override
     public StepResult execute(Context ctx, EventSink out) {
-      Path runDir = ctx.home().runDir(ctx.runId());
+      Path runDir = in.runDir(ctx);
       Map<String, String> overrides = new LinkedHashMap<>(in.masterOverrides());
       Optional<SecretRef> keyPassword = in.options().keyPassword();
       if (keyPassword.isPresent()) {
@@ -417,6 +434,10 @@ final class VendorSteps {
         }
       }
       try {
+        if (in.transit()) {
+          // ADR-0002: the scratch Tomcat a transit hop's buildomatic is pointed at
+          Files.createDirectories(Path.of(overrides.get(APP_SERVER_DIR)).resolve("webapps"));
+        }
         MasterProperties.Staged staged =
             MasterProperties.stage(buildomaticDir(), overrides, runDir);
         Logs.info(
@@ -449,7 +470,7 @@ final class VendorSteps {
     @Override
     public StepResult compensate(Context ctx, EventSink out) {
       try {
-        MasterProperties.restore(buildomaticDir(), ctx.home().runDir(ctx.runId()));
+        MasterProperties.restore(buildomaticDir(), in.runDir(ctx));
         return StepResult.ok();
       } catch (IOException e) {
         return Failures.recoverable(
@@ -457,8 +478,7 @@ final class VendorSteps {
                 + buildomaticDir().resolve(Buildomatic.MASTER_PROPERTIES)
                 + ": "
                 + e.getMessage(),
-            "restore the file by hand from "
-                + MasterProperties.backupFor(ctx.home().runDir(ctx.runId())));
+            "restore the file by hand from " + MasterProperties.backupFor(in.runDir(ctx)));
       }
     }
   }
@@ -537,21 +557,27 @@ final class VendorSteps {
     }
 
     private Path marker(Context ctx) {
-      return ctx.home().runDir(ctx.runId()).resolve(DONE_MARKER);
+      return in.runDir(ctx).resolve(DONE_MARKER);
     }
 
     private Path attemptMarker(Context ctx) {
-      return ctx.home().runDir(ctx.runId()).resolve(ATTEMPT_MARKER);
+      return in.runDir(ctx).resolve(ATTEMPT_MARKER);
     }
 
     @Override
     public String id() {
-      return RUN_VENDOR_UPGRADE;
+      return in.scoped(RUN_VENDOR_UPGRADE);
     }
 
     @Override
     public String title() {
-      return "run the vendor upgrade (" + scriptName() + ")";
+      return in.transit()
+          ? "run the vendor upgrade to "
+              + in.options().toVersion()
+              + " as a transit hop ("
+              + scriptName()
+              + "; nothing deployed)"
+          : "run the vendor upgrade (" + scriptName() + ")";
     }
 
     @Override
@@ -702,13 +728,22 @@ final class VendorSteps {
       Durability.syncDirectory(file.getParent());
       // ADR-0029: the snapshot set keeps the fact that the script was launched; the compensation
       // of this step erases the attempt marker but never this, and a database rollback refuses to
-      // rebuild a database the script never touched
+      // rebuild a database the script never touched. Appended, so the first line names the first
+      // script of a route (ADR-0002): a newdb transit hop followed by a samedb hop still rebuilt
+      // the database from the point-B export.
       SnapshotSet set = in.snapshots(ctx);
       Files.createDirectories(set.dir());
       Files.writeString(
           set.vendorStarted(),
-          scriptName() + " started at " + rt.clock().instant() + System.lineSeparator(),
-          UTF_8);
+          scriptName()
+              + " started at "
+              + rt.clock().instant()
+              + " for "
+              + in.options().toVersion()
+              + System.lineSeparator(),
+          UTF_8,
+          StandardOpenOption.CREATE,
+          StandardOpenOption.APPEND);
       Durability.sync(set.vendorStarted());
     }
 
@@ -745,6 +780,30 @@ final class VendorSteps {
             rt, ctx, out, this, "cannot remove " + attemptMarker(ctx) + ": " + e.getMessage());
       }
       return Failures.recoverable(n.reason(), n.remediation());
+    }
+
+    /**
+     * ADR-0002: a transit hop deploys nothing. Its properties name a scratch Tomcat, so a live
+     * webapp that now states the hop's version means buildomatic deployed anyway; the run fails and
+     * compensation restores point B rather than starting a server on an intermediate version.
+     */
+    @Override
+    public CheckResult postcheck(Context ctx) {
+      if (!in.transit()) {
+        return CheckResult.pass();
+      }
+      Optional<String> live = JrsVersion.ofWebapp(in.webappDir());
+      if (live.isPresent() && live.get().equals(in.options().toVersion())) {
+        return CheckResult.fail(
+            "the transit hop to "
+                + in.options().toVersion()
+                + " deployed its webapp into "
+                + in.webappDir()
+                + "; a transit hop must leave the live webapp alone",
+            "the run is rolled back to point B; report the package's buildomatic version, since"
+                + " appServerType=skipAppServerCheck did not keep it from deploying");
+      }
+      return CheckResult.pass();
     }
 
     private StepResult done(Context ctx, EventSink out) {

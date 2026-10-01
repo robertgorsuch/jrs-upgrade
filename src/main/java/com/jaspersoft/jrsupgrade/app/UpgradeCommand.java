@@ -10,6 +10,7 @@ import com.jaspersoft.jrsupgrade.ops.upgrade.UpgradeOperations;
 import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -59,8 +60,28 @@ final class UpgradeCommand implements Callable<Integer> {
       names = "--package",
       paramLabel = "<dir>",
       description =
-          "Unpacked target distribution (contains buildomatic/ and the webapp; required).")
-  Path packageDir;
+          "Unpacked target distribution (contains buildomatic/ and the webapp; required). Repeat"
+              + " it for a route the matrix documents only in hops, e.g. 8.2.0 to 10.1.0 through"
+              + " 10.0.0: one package per hop, matched by the version each states.")
+  List<Path> packageDirs;
+
+  @Option(
+      names = "--war",
+      paramLabel = "<file>",
+      description =
+          "A patched WAR (e.g. the vendor's pre-patched build) to deploy instead of the package's"
+              + " own webapp; the package's buildomatic still runs the upgrade, and the run records"
+              + " both checksums.")
+  Path war;
+
+  @Option(
+      names = "--custom-ddl",
+      paramLabel = "<dir>",
+      description =
+          "newdb only: SQL scripts (*.sql, run in name order) that re-create the customer tables"
+              + " and sequences js-upgrade-newdb drops with the repository database; run after the"
+              + " vendor script, before the server starts. Their rows are not carried over.")
+  Path customDdl;
 
   @Option(
       names = "--mode",
@@ -153,7 +174,7 @@ final class UpgradeCommand implements Callable<Integer> {
   public Integer call() {
     PrintWriter out = spec.commandLine().getOut();
     PrintWriter err = spec.commandLine().getErr();
-    if (to == null || to.isBlank() || packageDir == null) {
+    if (to == null || to.isBlank() || packageDirs == null || packageDirs.isEmpty()) {
       return ExitCodes.fail(
           out,
           err,
@@ -184,7 +205,7 @@ final class UpgradeCommand implements Callable<Integer> {
       UpgradeOperations.UpgradeOptions options =
           new UpgradeOperations.UpgradeOptions(
               to,
-              packageDir,
+              packageDirs.get(0),
               parsed,
               dbBackupConfirmed,
               Optional.ofNullable(tomcatDir),
@@ -192,7 +213,10 @@ final class UpgradeCommand implements Callable<Integer> {
               Optional.ofNullable(keyAlias),
               keyPassword,
               includeEvents,
-              migratePasswords);
+              migratePasswords,
+              Optional.ofNullable(war),
+              packageDirs.subList(1, packageDirs.size()),
+              Optional.ofNullable(customDdl));
       Plan planned;
       try {
         DefaultUpgradeOperations ops = new DefaultUpgradeOperations(services);

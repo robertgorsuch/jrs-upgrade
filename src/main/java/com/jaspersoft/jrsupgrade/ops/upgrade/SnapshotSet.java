@@ -28,6 +28,7 @@ record SnapshotSet(Path dir, Platform.OsFamily os) {
   static final String SHA_SUFFIX = ".sha256";
   static final String EXTERNAL_RECORD = "full-export.external";
   static final String VENDOR_STARTED = "vendor-upgrade.started";
+  static final String FOREIGN_SCHEMA = "foreign-objects.sql";
 
   SnapshotSet {
     Objects.requireNonNull(dir, "dir");
@@ -96,6 +97,11 @@ record SnapshotSet(Path dir, Platform.OsFamily os) {
     } catch (IOException e) {
       return fullExport();
     }
+  }
+
+  /** The structure of the customer tables a newdb hop drops (issue #3). */
+  Path foreignSchema() {
+    return dir.resolve(FOREIGN_SCHEMA);
   }
 
   Path archivesDir() {

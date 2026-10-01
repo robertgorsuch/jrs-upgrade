@@ -11,8 +11,10 @@ import com.jaspersoft.jrsupgrade.jrs.api.ExportImportStrategy;
 import com.jaspersoft.jrsupgrade.ops.exim.ExportImportOperations;
 import com.jaspersoft.jrsupgrade.ops.upgrade.UpgradeOperations;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -223,7 +225,26 @@ public final class PlanRegistry {
         // and one that leaves the events where the vendor script leaves them (issue #106)
         args.path("includeEvents").asBoolean(false),
         // and one that leaves the stored passwords as they are (issue #108)
-        args.path("migratePasswords").asBoolean(false));
+        args.path("migratePasswords").asBoolean(false),
+        // and one that deploys the package's own webapp (issue #9)
+        text(args, "war").map(Path::of),
+        // and one of a single hop (issue #1)
+        transitPackages(args),
+        // and one that re-applies no DDL (issue #3)
+        text(args, "customDdl").map(Path::of));
+  }
+
+  private static List<Path> transitPackages(JsonNode args) {
+    List<Path> out = new ArrayList<>();
+    JsonNode list = args.get("transitPackages");
+    if (list != null && list.isArray()) {
+      for (JsonNode p : list) {
+        if (p.isTextual() && !p.asText().isBlank()) {
+          out.add(Path.of(p.asText()));
+        }
+      }
+    }
+    return out;
   }
 
   public static String upgradeArgs(UpgradeOperations.UpgradeOptions options) {
@@ -253,6 +274,18 @@ public final class PlanRegistry {
       node.put("keyPasswordRef", options.keyPassword().get().render());
     } else {
       node.putNull("keyPasswordRef");
+    }
+    if (options.war().isPresent()) {
+      node.put("war", options.war().get().toString());
+    } else {
+      node.putNull("war");
+    }
+    ArrayNode transit = node.putArray("transitPackages");
+    options.transitPackages().forEach(p -> transit.add(p.toString()));
+    if (options.customDdl().isPresent()) {
+      node.put("customDdl", options.customDdl().get().toString());
+    } else {
+      node.putNull("customDdl");
     }
     return Json.write(node);
   }
