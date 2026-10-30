@@ -34,7 +34,7 @@
     <!-- Build plugins -->
     <errorprone.version>2.50.0</errorprone.version>
     <google-java-format.version>1.22.0</google-java-format.version>
-    <spotless.version>2.43.0</spotless.version>
+    <spotless.version>2.46.1</spotless.version>
     <surefire.version>3.2.5</surefire.version>
     <jacoco.version>0.8.15</jacoco.version>
     <!-- Just under the 0.84 measured at the extraction (ADR-0001); raised as the slimming lands. -->
