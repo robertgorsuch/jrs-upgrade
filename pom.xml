@@ -17,7 +17,7 @@
     <picocli.version>4.7.7</picocli.version>
     <jackson.version>2.22.2</jackson.version>
     <slf4j.version>2.0.19</slf4j.version>
-    <logback.version>1.5.38</logback.version>
+    <logback.version>1.6.6</logback.version>
     <logstash-logback.version>7.4</logstash-logback.version>
     <sqlite-jdbc.version>3.53.4.0</sqlite-jdbc.version>
     <json-schema-validator.version>1.4.0</json-schema-validator.version>
