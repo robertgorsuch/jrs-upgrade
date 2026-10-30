@@ -15,7 +15,7 @@
     <project.build.outputTimestamp>2026-10-01T00:00:00Z</project.build.outputTimestamp>
     <!-- Runtime: what the extracted code imports (ADR-0001). None is added without an ADR. -->
     <picocli.version>4.7.7</picocli.version>
-    <jackson.version>2.22.2</jackson.version>
+    <jackson.version>2.22.4</jackson.version>
     <slf4j.version>2.0.19</slf4j.version>
     <logback.version>1.5.38</logback.version>
     <logstash-logback.version>7.4</logstash-logback.version>
