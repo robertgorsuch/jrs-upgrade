@@ -32,7 +32,7 @@
     <jqwik.version>1.9.3</jqwik.version>
     <mockito.version>5.23.0</mockito.version>
     <!-- Build plugins -->
-    <errorprone.version>2.50.0</errorprone.version>
+    <errorprone.version>2.51.0</errorprone.version>
     <google-java-format.version>1.22.0</google-java-format.version>
     <spotless.version>2.43.0</spotless.version>
     <surefire.version>3.2.5</surefire.version>
