@@ -87,6 +87,7 @@ The shaded jar is `target/jrs-upgrade.jar`; `java -jar target/jrs-upgrade.jar --
   - ADR-0004, the retired hotfix ledger.
 
   Higher ADR numbers cited in the docs and code are jrsctl's.
+- `docs/design.md` is the design the extraction from jrsctl was reviewed against, kept as a record.
 - `docs/spec.md` carries the sections of jrsctl's specification that govern the kept code, with a note on what was added since.
 - The backlog is the GitHub issues.
 
