@@ -30,7 +30,7 @@
     <assertj.version>3.27.7</assertj.version>
     <wiremock.version>3.13.2</wiremock.version>
     <jqwik.version>1.9.3</jqwik.version>
-    <mockito.version>5.23.0</mockito.version>
+    <mockito.version>5.24.0</mockito.version>
     <!-- Build plugins -->
     <errorprone.version>2.51.0</errorprone.version>
     <google-java-format.version>1.22.0</google-java-format.version>
