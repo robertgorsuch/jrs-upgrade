@@ -19,7 +19,7 @@
     <slf4j.version>2.0.20</slf4j.version>
     <logback.version>1.6.6</logback.version>
     <logstash-logback.version>7.4</logstash-logback.version>
-    <sqlite-jdbc.version>3.53.4.0</sqlite-jdbc.version>
+    <sqlite-jdbc.version>3.54.1.0</sqlite-jdbc.version>
     <json-schema-validator.version>1.5.9</json-schema-validator.version>
     <commons-compress.version>1.28.0</commons-compress.version>
     <commons-lang3.version>3.21.0</commons-lang3.version>
